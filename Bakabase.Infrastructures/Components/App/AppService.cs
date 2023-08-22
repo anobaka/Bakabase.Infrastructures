@@ -20,6 +20,7 @@ using Bootstrap.Components.Storage;
 using Bootstrap.Extensions;
 using Humanizer;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -128,6 +129,7 @@ namespace Bakabase.Infrastructures.Components.App
         private UpdaterUpdater UpdaterUpdater => _serviceProvider.GetRequiredService<UpdaterUpdater>();
         private readonly IBOptionsManager<AppOptions> _appOptionsManager;
         private readonly IServiceProvider _serviceProvider;
+        private IWebHostEnvironment Env => _serviceProvider.GetRequiredService<IWebHostEnvironment>();
 
         public AppService(ILogger<AppService> logger,
             IBOptionsManager<AppOptions> appOptionsManager, IServiceProvider serviceProvider)
@@ -194,7 +196,8 @@ namespace Bakabase.Infrastructures.Components.App
             UpdaterPath = UpdaterUpdater.RootPathPath,
             BackupPath = DataBackupDirectory,
             NotAcceptTerms = NotAcceptTerms,
-            NeedRestart = NeedRestart
+            NeedRestart = NeedRestart,
+            WebRootPath = Env.WebRootPath
         };
     }
 }
