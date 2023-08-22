@@ -39,36 +39,6 @@ namespace Bakabase.Infrastructures.Components.Configurations.App
             return appOptionsDescriber.OptionsKey;
         }
 
-        public static readonly AppOptionsManager Instance = new();
-
-        /// <summary>
-        /// Only <see cref="UiTheme.Light"/> or <see cref="UiTheme.Dark"/> will be returned.
-        /// </summary>
-        public UiTheme CalculatedUiTheme
-        {
-            get
-            {
-                var theme = Value.UiTheme;
-                if (theme == UiTheme.FollowSystem)
-                {
-                    try
-                    {
-                        var res = (int) Registry.GetValue(
-                            "HKEY_CURRENT_USER\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
-                            "AppsUseLightTheme", null);
-                        theme = res == 0 ? UiTheme.Dark : UiTheme.Light;
-                    }
-                    catch (Exception e)
-                    {
-                        theme = UiTheme.Light;
-                    }
-                    finally
-                    {
-                    }
-                }
-
-                return theme;
-            }
-        }
+        public static readonly AppOptionsManager Default = new();
     }
 }

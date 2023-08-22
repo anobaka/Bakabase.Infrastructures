@@ -70,6 +70,15 @@ namespace Bakabase.Infrastructures.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Some critical level tasks are not completed yet, data would be lost by forcing shutdown the app. Are you sure to exit now?.
+        /// </summary>
+        internal static string App_CriticalTasksRunningOnExit {
+            get {
+                return ResourceManager.GetString("App_CriticalTasksRunningOnExit", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Exit.
         /// </summary>
         internal static string App_Exit {

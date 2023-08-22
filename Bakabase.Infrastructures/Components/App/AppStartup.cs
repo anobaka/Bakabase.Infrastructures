@@ -8,6 +8,7 @@ using Bakabase.Infrastructures.Components.Configurations.App;
 using Bakabase.Infrastructures.Components.Orm;
 using Bakabase.Infrastructures.Components.Storage.Cleaning;
 using Bakabase.Infrastructures.Components.Storage.Services;
+using Bakabase.Infrastructures.Resources;
 using Bootstrap.Components.Communication.SignalR;
 using Bootstrap.Components.DependencyInjection;
 using Bootstrap.Components.Doc.Swagger;
@@ -42,7 +43,7 @@ namespace Bakabase.Infrastructures.Components.App
         public IConfiguration Configuration { get; }
         public IWebHostEnvironment Env { get; }
 
-        protected string AppDataPath => AppOptionsManager.Instance.Value.DataPath ?? AppService.DefaultAppDataDirectory;
+        protected string AppDataPath => AppOptionsManager.Default.Value.DataPath ?? AppService.DefaultAppDataDirectory;
 
         protected AppStartup(IConfiguration configuration, IWebHostEnvironment env)
         {
@@ -102,8 +103,6 @@ namespace Bakabase.Infrastructures.Components.App
                 c.UseBootstrapSqLite(AppDataPath, "bootstrap_log"));
 
             #endregion
-
-            services.AddLocalization(t => t.ResourcesPath = "Resources");
 
             services.AddSingleton<AppDataMover>();
 

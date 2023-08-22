@@ -40,11 +40,6 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <Compile Update="Resources\AppSharedResource.zh-hans.Designer.cs">
-	    <DependentUpon>AppSharedResource.zh-Hans.resx</DependentUpon>
-	    <DesignTime>True</DesignTime>
-	    <AutoGen>True</AutoGen>
-	  </Compile>
 	  <Compile Update="Resources\AppSharedResource.Designer.cs">
 	    <DesignTime>True</DesignTime>
 	    <AutoGen>True</AutoGen>
@@ -53,13 +48,14 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <EmbeddedResource Update="Resources\AppSharedResource.zh-Hans.resx">
-	    <LastGenOutput>AppSharedResource.zh-hans.Designer.cs</LastGenOutput>
-	    <Generator>ResXFileCodeGenerator</Generator>
-	  </EmbeddedResource>
 	  <EmbeddedResource Update="Resources\AppSharedResource.resx">
 	    <Generator>ResXFileCodeGenerator</Generator>
 	    <LastGenOutput>AppSharedResource.Designer.cs</LastGenOutput>
+	    <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+	  </EmbeddedResource>
+	  <EmbeddedResource Update="Resources\AppSharedResource.zh-Hans.resx">
+	    <LastGenOutput>AppSharedResource.zh-hans.Designer.cs</LastGenOutput>
+	    <Generator>ResXFileCodeGenerator</Generator>
 	    <CopyToOutputDirectory>Never</CopyToOutputDirectory>
 	  </EmbeddedResource>
 	</ItemGroup>

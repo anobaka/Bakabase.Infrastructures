@@ -1,4 +1,5 @@
-﻿using Bakabase.Infrastructures.Components.Gui;
+﻿using Bakabase.Infrastructures.Components.App.Models.Constants;
+using Bakabase.Infrastructures.Components.Gui;
 using Bootstrap.Components.Configuration.Abstractions;
 
 namespace Bakabase.Infrastructures.Components.Configurations.App
@@ -10,7 +11,7 @@ namespace Bakabase.Infrastructures.Components.Configurations.App
     public sealed class AppOptions
     {
         public string Language { get; set; }
-        public string Version { get; set; } = "0.0.0";
+        public string Version { get; set; } = AppConstants.InitialVersion;
         public bool EnablePreReleaseChannel { get; set; }
         public bool EnableAnonymousDataTracking { get; set; } = true;
         public string WwwRootPath { get; set; }
@@ -18,5 +19,7 @@ namespace Bakabase.Infrastructures.Components.Configurations.App
         public string PrevDataPath { get; set; }
         public CloseBehavior CloseBehavior { get; set; } = CloseBehavior.Prompt;
         public UiTheme UiTheme { get; set; }
+
+        public bool IsNotInitialized() => Version == AppConstants.InitialVersion;
     }
 }

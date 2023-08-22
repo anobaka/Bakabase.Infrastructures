@@ -120,6 +120,9 @@
   <data name="App_Cleaning" xml:space="preserve">
     <value>正在清理文件...</value>
   </data>
+  <data name="App_CriticalTasksRunningOnExit" xml:space="preserve">
+    <value>后台任务还在运行中，强制退出可能会影响数据的保存，确认退出吗？</value>
+  </data>
   <data name="App_Exit" xml:space="preserve">
     <value>确认退出</value>
   </data>

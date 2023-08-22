@@ -8,6 +8,7 @@ using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Aliyun.OSS;
+using Bakabase.Infrastructures.Components.App.Models.Constants;
 using Bakabase.Infrastructures.Components.Configurations;
 using Bakabase.Infrastructures.Components.Configurations.App;
 using Bootstrap.Components.Configuration.Abstractions;
@@ -128,7 +129,7 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade.Abstractions
             var version = await CheckNewVersion();
             if (version == null)
             {
-                var noLocalVersion = CurrentVersion == SemVersion.Parse("0.0.0");
+                var noLocalVersion = CurrentVersion == SemVersion.Parse(AppConstants.InitialVersion, SemVersionStyles.Any);
                 State = new UpdaterState
                 {
                     Status = noLocalVersion ? UpdaterStatus.Failed : UpdaterStatus.UpToDate

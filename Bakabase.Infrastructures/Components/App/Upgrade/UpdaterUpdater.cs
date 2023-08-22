@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Bakabase.Infrastructures.Components.App.Models.Constants;
 using Bakabase.Infrastructures.Components.App.Upgrade.Abstractions;
 using Bakabase.Infrastructures.Components.Configurations;
 using Bakabase.Infrastructures.Components.Configurations.App;
@@ -31,7 +32,7 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade
                     return SemVersion.Parse(vi.ProductVersion);
                 }
 
-                return SemVersion.Parse("0.0.0");
+                return SemVersion.Parse(AppConstants.InitialVersion, SemVersionStyles.Any);
             }
         }
 

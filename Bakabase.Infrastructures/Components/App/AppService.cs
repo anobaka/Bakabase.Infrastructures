@@ -9,6 +9,7 @@ using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Bakabase.Infrastructures.Components.App.Models.Constants;
 using Bakabase.Infrastructures.Components.App.Models.ResponseModels;
 using Bakabase.Infrastructures.Components.App.Upgrade;
 using Bakabase.Infrastructures.Components.Configurations.App;
@@ -36,7 +37,7 @@ namespace Bakabase.Infrastructures.Components.App
         #region Static
 
         public static SemVersion CoreVersion => SemVersion.Parse(Assembly.GetEntryAssembly()
-            ?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "0.0.0");
+            ?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? AppConstants.InitialVersion, SemVersionStyles.Any);
 
         private static string _defaultAppDataDirectory;
 
@@ -151,17 +152,17 @@ namespace Bakabase.Infrastructures.Components.App
         public string DataBackupDirectory => RequestAppDataDirectory("backups");
 
         public async Task<SemVersion> GetLastRunningVersion() =>
-            SemVersion.Parse((_appOptionsManager).Value.Version ?? "0.0.0");
+            SemVersion.Parse((_appOptionsManager).Value.Version ?? AppConstants.InitialVersion);
 
         public async Task MakeBackupIfNeeded()
         {
             // hardcode
             var prevVersion = await GetLastRunningVersion();
-            if (prevVersion != CoreVersion && !SemVersion.Parse("0.0.0").Equals(prevVersion))
+            if (prevVersion != CoreVersion && !SemVersion.Parse(AppConstants.InitialVersion, SemVersionStyles.Any).Equals(prevVersion))
             {
                 _logger.LogInformation("New version of app is starting, making backups...");
                 var targetRootDir =
-                    Directory.CreateDirectory(Path.Combine(DataBackupDirectory, prevVersion.ToString()));
+                    Directory.CreateDirectory(Path.Combine(DataBackupDirectory, prevVersion.ToString()!));
                 var ignoredDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
                     {DataBackupDirectory, UpdaterUpdater.RootPathPath};
                 // dirs

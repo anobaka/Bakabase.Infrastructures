@@ -120,6 +120,9 @@
   <data name="App_Cleaning" xml:space="preserve">
     <value>Cleaning...</value>
   </data>
+  <data name="App_CriticalTasksRunningOnExit" xml:space="preserve">
+    <value>Some critical level tasks are not completed yet, data would be lost by forcing shutdown the app. Are you sure to exit now?</value>
+  </data>
   <data name="App_Exit" xml:space="preserve">
     <value>Exit</value>
   </data>
