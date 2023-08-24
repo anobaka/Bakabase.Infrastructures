@@ -152,6 +152,7 @@ namespace Bakabase.Infrastructures.Components.App
         }
 
         public string DataBackupDirectory => RequestAppDataDirectory("backups");
+        public string TempFilesPath => RequestAppDataDirectory("temp");
 
         public async Task<SemVersion> GetLastRunningVersion() =>
             SemVersion.Parse((_appOptionsManager).Value.Version ?? AppConstants.InitialVersion);
@@ -162,11 +163,11 @@ namespace Bakabase.Infrastructures.Components.App
             var prevVersion = await GetLastRunningVersion();
             if (prevVersion != CoreVersion && !SemVersion.Parse(AppConstants.InitialVersion, SemVersionStyles.Any).Equals(prevVersion))
             {
-                _logger.LogInformation("New version of app is starting, making backups...");
+                _logger.LogInformation("New version of app is starting, start making backups...");
                 var targetRootDir =
                     Directory.CreateDirectory(Path.Combine(DataBackupDirectory, prevVersion.ToString()!));
                 var ignoredDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-                    {DataBackupDirectory, UpdaterUpdater.RootPathPath};
+                    {DataBackupDirectory, UpdaterUpdater.RootPathPath, TempFilesPath};
                 // dirs
                 foreach (var dir in Directory.GetDirectories(AppDataDirectory).Where(a => !ignoredDirs.Contains(a)))
                 {
@@ -197,7 +198,7 @@ namespace Bakabase.Infrastructures.Components.App
             BackupPath = DataBackupDirectory,
             NotAcceptTerms = NotAcceptTerms,
             NeedRestart = NeedRestart,
-            WebRootPath = Env.WebRootPath
+            TempFilesPath = TempFilesPath
         };
     }
 }
