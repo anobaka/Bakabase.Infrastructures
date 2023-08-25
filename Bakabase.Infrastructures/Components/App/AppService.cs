@@ -37,8 +37,17 @@ namespace Bakabase.Infrastructures.Components.App
     {
         #region Static
 
-        public static SemVersion CoreVersion => SemVersion.Parse(Assembly.GetEntryAssembly()
-            ?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? AppConstants.InitialVersion, SemVersionStyles.Any);
+        public static SemVersion CoreVersion
+        {
+            get
+            {
+                var verStr = Assembly.GetEntryAssembly()
+                                 ?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ??
+                             AppConstants.InitialVersion;
+                verStr = verStr.Split('+').FirstOrDefault();
+                return SemVersion.Parse(verStr, SemVersionStyles.Any);
+            }
+        }
 
         private static string _defaultAppDataDirectory;
 
