@@ -32,8 +32,8 @@ namespace Bakabase.Infrastructures.Components.Jobs
             }
             catch (Exception e)
             {
-                Logger.LogInformation($"An error occurred during Job {GetType().Name} execution");
-                Logger.LogError(e.BuildFullInformationText());
+                Logger.LogError(
+                    $"An error occurred during Job {GetType().Name} execution: {e.BuildFullInformationText()}");
             }
         }
 
