@@ -6,6 +6,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -91,6 +92,40 @@ namespace Bakabase.Infrastructures.Components.App
                 : "en";
             CultureInfo.DefaultThreadCurrentCulture = CultureInfo.DefaultThreadCurrentUICulture =
                 CultureInfo.CurrentCulture = CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(cultureInfo);
+        }
+
+        private static OsPlatform? _osPlatform;
+
+        public static OsPlatform OsPlatform
+        {
+            get
+            {
+                if (!_osPlatform.HasValue)
+                {
+                    if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                    {
+                        _osPlatform = OsPlatform.Windows;
+                    }
+                    else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                    {
+                        _osPlatform = OsPlatform.Linux;
+                    }
+                    else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+                    {
+                        _osPlatform = OsPlatform.Osx;
+                    }
+                    else if (RuntimeInformation.IsOSPlatform(OSPlatform.FreeBSD))
+                    {
+                        _osPlatform = OsPlatform.FreeBsd;
+                    }
+                    else
+                    {
+                        _osPlatform = OsPlatform.Unknown;
+                    }
+                }
+
+                return _osPlatform.Value;
+            }
         }
 
         static AppService()
