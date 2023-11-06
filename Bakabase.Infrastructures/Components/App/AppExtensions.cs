@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Bakabase.Infrastructures.Components.App.Models.Constants;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Console;
@@ -30,6 +31,37 @@ namespace Bakabase.Infrastructures.Components.App
 #endif
                 a.AddSerilog();
             });
+        }
+
+        public static bool IsMobileApp(this AppDistributionType type)
+        {
+            return type switch
+            {
+                AppDistributionType.Android => true,
+                AppDistributionType.Ios => true,
+                _ => false
+            };
+        }
+
+        public static bool IsDesktopApp(this AppDistributionType type)
+        {
+            return type switch
+            {
+                AppDistributionType.WindowsApp => true,
+                AppDistributionType.MacOsApp => true,
+                AppDistributionType.LinuxApp => true,
+                _ => false
+            };
+        }
+
+        public static bool IsServer(this AppDistributionType type)
+        {
+            return type switch
+            {
+                AppDistributionType.LinuxServer => true,
+                AppDistributionType.WindowsServer => true,
+                _ => false
+            };
         }
     }
 }

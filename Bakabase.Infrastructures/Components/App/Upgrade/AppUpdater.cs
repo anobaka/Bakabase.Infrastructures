@@ -10,6 +10,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using Bakabase.Infrastructures.Components.App.Upgrade.Abstractions;
+using Bakabase.Infrastructures.Components.App.Upgrade.Adapters;
 using Bakabase.Infrastructures.Components.Configurations;
 using Bakabase.Infrastructures.Components.Configurations.App;
 using Bootstrap.Components.Configuration.Abstractions;
@@ -33,13 +34,16 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade
         private static Process _mainProcess;
 
         public static Process MainProcess => _mainProcess ??= Process.GetCurrentProcess();
+        private readonly IBakabaseUpdater _updater;
 
         public AppUpdater(OssDownloader downloader, ILogger<AbstractUpdater> logger, AppService appService,
             IBOptionsManager<UpdaterOptions> updaterOptionsManager, IBOptionsManager<AppOptions> appOptionsManager,
-            IHostApplicationLifetime lifetime) : base(downloader, logger, appService, updaterOptionsManager,
+            IHostApplicationLifetime lifetime, IBakabaseUpdater updater) : base(downloader, logger, appService,
+            updaterOptionsManager,
             appOptionsManager)
         {
             _lifetime = lifetime;
+            _updater = updater;
         }
 
         protected override async Task<bool> GetEnablePreReleaseChannel() =>
@@ -47,18 +51,12 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade
 
         protected override async Task UpdateWithDownloadedFiles(AppVersionInfo version)
         {
-            State.Status = UpdaterStatus.PendingRestart;
+            await UpdateState(s => s.Status = UpdaterStatus.PendingRestart);
         }
 
         public async Task StartUpdater()
         {
             var newVersion = await CheckNewVersion();
-            var updaterExecutable = Path.Combine(AppService.AppDataDirectory, "updater", "Bakabase.Updater.exe");
-            if (!File.Exists(updaterExecutable))
-            {
-                throw new Exception($"{updaterExecutable} does not exits");
-            }
-
             newVersion.Installers[0].OsPlatform = OSPlatform.Windows;
             newVersion.Installers[0].OsArchitecture = Architecture.X64;
 
@@ -66,39 +64,9 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade
                 a.OsPlatform != null && RuntimeInformation.IsOSPlatform(a.OsPlatform.Value) &&
                 RuntimeInformation.OSArchitecture == a.OsArchitecture);
 
-            var rawArguments = new List<object>
-            {
-                "--pid",
-                MainProcess.Id,
-                "--process-name",
-                MainProcess.ProcessName,
-                "--app-dir",
-                Path.GetDirectoryName(MainProcess.MainModule.FileName),
-                "--new-files-dir",
-                DownloadDir,
-                "--executable",
-                MainProcess.MainModule.FileName
-            };
-
-            if (installer != null)
-            {
-                rawArguments.Add("--installer");
-                rawArguments.Add($"{installer.ToCommand()}");
-            }
-
-            var arguments = rawArguments.Select(a => $"\"{a}\"").ToArray();
-
-            var argumentsString = string.Join(' ', arguments);
-
-            var startInfo = new ProcessStartInfo(updaterExecutable, argumentsString)
-            {
-                Verb = "runas",
-                CreateNoWindow = true
-            };
-
-            Logger.LogInformation($"Starting {updaterExecutable} with arguments {argumentsString}");
-
-            Process.Start(startInfo);
+            await _updater.StartUpdater(MainProcess.Id, MainProcess.ProcessName,
+                Path.GetDirectoryName(MainProcess.MainModule!.FileName), DownloadDir, MainProcess.MainModule.FileName,
+                installer);
         }
     }
 }

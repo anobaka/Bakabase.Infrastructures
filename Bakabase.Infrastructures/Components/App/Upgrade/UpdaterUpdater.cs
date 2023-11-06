@@ -19,6 +19,7 @@ using Semver;
 
 namespace Bakabase.Infrastructures.Components.App.Upgrade
 {
+    [Obsolete]
     public class UpdaterUpdater : AbstractUpdater
     {
         protected override SemVersion CurrentVersion

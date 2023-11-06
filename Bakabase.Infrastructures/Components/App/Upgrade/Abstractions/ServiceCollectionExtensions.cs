@@ -16,8 +16,8 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade.Abstractions
         {
             return services
                 .AddSingleton<OssDownloader>()
-                .AddSingleton<AppUpdater>()
-                .AddSingleton<UpdaterUpdater>();
+                .AddSingleton<AppUpdater>();
+            // .AddSingleton<UpdaterUpdater>();
         }
     }
 }

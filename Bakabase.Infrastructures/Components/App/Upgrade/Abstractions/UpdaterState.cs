@@ -26,5 +26,16 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade.Abstractions
 
         public string Error { get; set; }
         public UpdaterStatus Status { get; set; }
+
+        public void Reset()
+        {
+            FailedFileCount = 0;
+            SkippedFileCount = 0;
+            DownloadedFileCount = 0;
+            TotalFileCount = 0;
+            StartDt = default;
+            Error = null;
+            Status = default;
+        }
     }
 }

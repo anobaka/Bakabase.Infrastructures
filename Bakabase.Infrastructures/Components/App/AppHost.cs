@@ -109,19 +109,6 @@ namespace Bakabase.Infrastructures.Components.App
             return Task.CompletedTask;
         }
 
-        protected virtual void PrepareUpdaterAsync(IServiceProvider serviceProvider)
-        {
-            try
-            {
-                var updaterUpdater = serviceProvider.GetRequiredService<UpdaterUpdater>();
-                Task.Run(async () => { await updaterUpdater.StartUpdating(); });
-            }
-            catch (Exception e)
-            {
-                Logger.LogError(e, "Error while preparing updater updater");
-            }
-        }
-
         private IHost CreateHost(string[] args, ConfigurationRegistrations configurationRegistrations)
         {
             // {DataPath ?? AppData}/configs/*
@@ -286,8 +273,6 @@ namespace Bakabase.Infrastructures.Components.App
 
                             _guiAdapter.ShowInitializationWindow(AppLocalizer.App_FinishingUp());
                             await ExecuteCustomProgress(Host.Services);
-
-                            PrepareUpdaterAsync(Host.Services);
 
                             var jobManager = Host.Services.GetService<SimpleJobManager>();
                             jobManager?.Start();

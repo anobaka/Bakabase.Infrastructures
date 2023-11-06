@@ -238,7 +238,6 @@ namespace Bakabase.Infrastructures.Components.App
             AppDataPath = AppDataDirectory,
             CoreVersion = CoreVersion.ToString(),
             LogPath = LogPath,
-            UpdaterPath = UpdaterUpdater.RootPathPath,
             BackupPath = DataBackupDirectory,
             NotAcceptTerms = NotAcceptTerms,
             NeedRestart = NeedRestart,

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -16,6 +17,7 @@ using Bootstrap.Components.Miscellaneous.ResponseBuilders;
 using Bootstrap.Components.Storage;
 using Bootstrap.Extensions;
 using Bootstrap.Models.ResponseModels;
+using JetBrains.Annotations;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -26,8 +28,10 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade.Abstractions
     public abstract class AbstractUpdater
     {
         private OssClient _ossClient;
-        private OssClient OssClient => _ossClient??= new OssClient(Options.Value.OssEndpoint,
+
+        private OssClient OssClient => _ossClient ??= new OssClient(Options.Value.OssEndpoint,
             Options.Value.OssAccessKeyId, Options.Value.OssAccessKeySecret);
+
         private readonly OssDownloader _downloader;
         protected readonly ILogger<AbstractUpdater> Logger;
         private CancellationTokenSource _cts;
@@ -41,10 +45,10 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade.Abstractions
         protected IOptions<UpdaterOptions> Options => UpdaterOptionsManager;
         protected IBOptionsManager<UpdaterOptions> UpdaterOptionsManager { get; }
         protected IBOptionsManager<AppOptions> AppOptionsManager { get; }
-
         protected abstract string OssObjectPrefix { get; }
 
-        protected AbstractUpdater(OssDownloader downloader, ILogger<AbstractUpdater> logger, AppService appService, IBOptionsManager<UpdaterOptions> updaterOptionsManager, IBOptionsManager<AppOptions> appOptionsManager)
+        protected AbstractUpdater(OssDownloader downloader, ILogger<AbstractUpdater> logger, AppService appService,
+            IBOptionsManager<UpdaterOptions> updaterOptionsManager, IBOptionsManager<AppOptions> appOptionsManager)
         {
             _downloader = downloader;
             Logger = logger;
@@ -129,42 +133,47 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade.Abstractions
             var version = await CheckNewVersion();
             if (version == null)
             {
-                var noLocalVersion = CurrentVersion == SemVersion.Parse(AppConstants.InitialVersion, SemVersionStyles.Any);
-                State = new UpdaterState
+                var noLocalVersion =
+                    CurrentVersion == SemVersion.Parse(AppConstants.InitialVersion, SemVersionStyles.Any);
+                await UpdateState(s =>
                 {
-                    Status = noLocalVersion ? UpdaterStatus.Failed : UpdaterStatus.UpToDate
-                };
-                if (noLocalVersion)
-                {
-                    State.Error = "No available version";
-                }
+                    s.Reset();
+                    s.Status = noLocalVersion ? UpdaterStatus.Failed : UpdaterStatus.UpToDate;
+                    if (noLocalVersion)
+                    {
+                        s.Error = "No available version";
+                    }
+                });
 
                 return BaseResponseBuilder.Ok;
             }
 
             _cts = new CancellationTokenSource();
             var ct = _cts.Token;
-            State = new UpdaterState
+
+            await UpdateState(s =>
             {
-                StartDt = DateTime.Now,
-                Status = UpdaterStatus.Running
-            };
+                s.Reset();
+                s.StartDt = DateTime.Now;
+                s.Status = UpdaterStatus.Running;
+            });
 
             // App Files
             var appPrefix =
                 $"{OssObjectPrefix.TrimEnd('/')}/{version.Version}/{UnpackedFilesOssPathAfterVersion}";
             var remoteFiles = ListOssObjects(appPrefix);
 
-            State.TotalFileCount = remoteFiles.Length;
+            await UpdateState(s => s.TotalFileCount = remoteFiles.Length);
 
             var remoteFilesMap = remoteFiles.ToDictionary(p => p.Key.Replace(appPrefix, null), p => p);
 
-            Task.Run(async () => { await DownloadAndUpdate(version, remoteFilesMap, ct); }, ct);
+            _ = Task.Run(async () => { await DownloadAndUpdate(version, remoteFilesMap, ct); }, ct);
 
             return BaseResponseBuilder.Ok;
         }
 
-        private async Task DownloadAndUpdate(AppVersionInfo version, Dictionary<string, OssObjectSummary> ossObjectRelativePathSummaryMap,
+        private async Task DownloadAndUpdate(AppVersionInfo version,
+            Dictionary<string, OssObjectSummary> ossObjectRelativePathSummaryMap,
             CancellationToken ct)
         {
             // todo: retry interval
@@ -173,7 +182,8 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade.Abstractions
                 // url - (local fullname, cache fullname)
                 var filesToDownload = ossObjectRelativePathSummaryMap
                     .ToDictionary(p => $"{Options.Value.OssDomain.TrimEnd('/')}/{p.Value.Key.TrimStart('/')}",
-                        p => (Fullname: Path.Combine(DownloadDir, p.Key), CacheFullname: Path.Combine(AppRootPath, p.Key)));
+                        p => (Fullname: Path.Combine(DownloadDir, p.Key),
+                            CacheFullname: Path.Combine(AppRootPath, p.Key)));
 
                 var urlFullnameMap = filesToDownload
                     .ToDictionary(p => p.Key, p => p.Value.Fullname);
@@ -197,27 +207,22 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade.Abstractions
                         }
 
                         return false;
-                    }, url =>
-                    {
-                        State.SkippedFileCount++;
-                        return Task.CompletedTask;
-                    }, url =>
-                    {
-                        State.DownloadedFileCount++;
-                        return Task.CompletedTask;
-                    }, url =>
-                    {
-                        State.FailedFileCount++;
-                        return Task.CompletedTask;
-                    }, ct);
+                    },
+                    async url => await UpdateState(s => ++s.SkippedFileCount),
+                    async url => await UpdateState(s => ++s.DownloadedFileCount),
+                    async url => await UpdateState(s => ++s.FailedFileCount), ct);
 
                 await UpdateWithDownloadedFiles(version);
             }
             catch (Exception e)
             {
                 Logger.LogError(e, $"An error occurred during downloading update files: {e.Message}");
-                State.Error = e.Message;
-                State.Status = UpdaterStatus.Failed;
+
+                await UpdateState(s =>
+                {
+                    s.Error = e.Message;
+                    s.Status = UpdaterStatus.Failed;
+                });
             }
             finally
             {
@@ -225,16 +230,26 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade.Abstractions
             }
         }
 
-        protected virtual Task UpdateWithDownloadedFiles(AppVersionInfo version)
+        protected virtual async Task UpdateWithDownloadedFiles(AppVersionInfo version)
         {
             DirectoryUtils.Merge(DownloadDir, AppRootPath, true);
-            State.Status = UpdaterStatus.UpToDate;
-            return Task.CompletedTask;
+            await UpdateState(s => s.Status = UpdaterStatus.UpToDate);
         }
 
         public void StopUpdating()
         {
             _cts?.Cancel();
         }
+
+        public async Task UpdateState(Action<UpdaterState> update)
+        {
+            update(State);
+            if (OnStateChange != null)
+            {
+                await OnStateChange(State);
+            }
+        }
+
+        [CanBeNull] public event Func<UpdaterState, Task> OnStateChange;
     }
 }
