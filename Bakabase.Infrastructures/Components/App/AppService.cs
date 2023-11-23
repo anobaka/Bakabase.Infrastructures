@@ -170,7 +170,6 @@ namespace Bakabase.Infrastructures.Components.App
         #endregion
 
         private readonly ILogger<AppService> _logger;
-        private UpdaterUpdater UpdaterUpdater => _serviceProvider.GetRequiredService<UpdaterUpdater>();
         private readonly IBOptionsManager<AppOptions> _appOptionsManager;
         private readonly IServiceProvider _serviceProvider;
         private IWebHostEnvironment Env => _serviceProvider.GetRequiredService<IWebHostEnvironment>();
@@ -197,6 +196,7 @@ namespace Bakabase.Infrastructures.Components.App
 
         public string DataBackupDirectory => RequestAppDataDirectory("backups");
         public string TempFilesPath => RequestAppDataDirectory("temp");
+        public string ComponentsPath => RequestAppDataDirectory("components");
 
         public async Task<SemVersion> GetLastRunningVersion() =>
             SemVersion.Parse((_appOptionsManager).Value.Version ?? AppConstants.InitialVersion);
@@ -205,13 +205,14 @@ namespace Bakabase.Infrastructures.Components.App
         {
             // hardcode
             var prevVersion = await GetLastRunningVersion();
-            if (prevVersion != CoreVersion && !SemVersion.Parse(AppConstants.InitialVersion, SemVersionStyles.Any).Equals(prevVersion))
+            if (prevVersion != CoreVersion &&
+                !SemVersion.Parse(AppConstants.InitialVersion, SemVersionStyles.Any).Equals(prevVersion))
             {
                 _logger.LogInformation("New version of app is starting, start making backups...");
                 var targetRootDir =
                     Directory.CreateDirectory(Path.Combine(DataBackupDirectory, prevVersion.ToString()!));
                 var ignoredDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-                    {DataBackupDirectory, UpdaterUpdater.RootPathPath, TempFilesPath};
+                    {DataBackupDirectory, TempFilesPath, ComponentsPath};
                 // dirs
                 foreach (var dir in Directory.GetDirectories(AppDataDirectory).Where(a => !ignoredDirs.Contains(a)))
                 {
