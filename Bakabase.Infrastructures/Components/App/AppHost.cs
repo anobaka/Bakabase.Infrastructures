@@ -48,6 +48,8 @@ namespace Bakabase.Infrastructures.Components.App
         protected AppLocalizer AppLocalizer { get; private set; }
         protected abstract string DisplayName { get; }
 
+        protected virtual int ListeningPortCount { get; } = 1;
+
         public IHost Host { get; private set; }
         public string FeAddress { get; set; }
         private const string DefaultFeAddress = "http://localhost:4444";
@@ -148,12 +150,23 @@ namespace Bakabase.Infrastructures.Components.App
                         configurationRegistrations.Configure(collection, context.Configuration, d);
                     }
                 });
+
+            var listenPorts = new List<int>();
 #if RELEASE
-                        var port = NetworkUtils.FreeTcpPort();
-                        hostBuilder = hostBuilder.ConfigureWebHost(t => t.UseUrls($"http://localhost:{port}"));
+            for (var i = 0; i < ListeningPortCount; i++)
+            {
+                listenPorts.Add(NetworkUtils.GetFreeTcpPortAfter(i == 0 ? 10000 : listenPorts[i - 1]));
+            }
+            
+#else
+            listenPorts.Add(5000);
+            for (var i = 1; i < ListeningPortCount; i++)
+            {
+                listenPorts.Add(NetworkUtils.GetFreeTcpPortAfter(listenPorts[i - 1]));
+            }
 #endif
-
-
+            hostBuilder = hostBuilder.ConfigureWebHost(t =>
+                t.UseUrls(listenPorts.Select(p => $"http://localhost:{p}").ToArray()));
             return hostBuilder.Build();
         }
 

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using System.Linq;
 using System.Text;
 using Bakabase.Infrastructures.Components.App.Upgrade.Abstractions;
 using Bakabase.Infrastructures.Components.Configurations;
@@ -23,6 +24,7 @@ using Bootstrap.Models.Constants;
 using Bootstrap.Models.Exceptions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.SignalR;
@@ -107,6 +109,8 @@ namespace Bakabase.Infrastructures.Components.App
             services.AddSingleton<AppDataMover>();
 
             services.AddResponseCaching();
+
+            services.AddSingleton<AppContext>();
         }
 
         protected virtual void ConfigureEndpointsAtFirst(IEndpointRouteBuilder routeBuilder)
@@ -116,6 +120,12 @@ namespace Bakabase.Infrastructures.Components.App
 
         public virtual void Configure(IApplicationBuilder app, IHostApplicationLifetime lifetime)
         {
+            lifetime.ApplicationStarted.Register(() =>
+            {
+                app.ApplicationServices.GetRequiredService<AppContext>().ServerAddresses =
+                    app.ServerFeatures.Get<IServerAddressesFeature>().Addresses.ToArray();
+            });
+
             app.UseBootstrapCors(null);
 
             app.UseSwagger(t => t.RouteTemplate = "internal-doc/swagger/{documentName}/swagger.json");
