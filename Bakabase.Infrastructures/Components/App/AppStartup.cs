@@ -40,7 +40,8 @@ using Newtonsoft.Json.Serialization;
 
 namespace Bakabase.Infrastructures.Components.App
 {
-    public abstract class AppStartup
+    public abstract class AppStartup<TSwaggerCustomDocumentFilter>
+        where TSwaggerCustomDocumentFilter : SwaggerCustomModelDocumentFilter
     {
         public IConfiguration Configuration { get; }
         public IWebHostEnvironment Env { get; }
@@ -57,7 +58,7 @@ namespace Bakabase.Infrastructures.Components.App
 
         protected virtual void RegisterMigrators(IServiceCollection services)
         {
-            
+
         }
 
         public virtual void ConfigureServices(IServiceCollection services)
@@ -79,7 +80,7 @@ namespace Bakabase.Infrastructures.Components.App
 
             services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
 
-            services.AddBootstrapSwaggerGen("v1", "API");
+            services.AddBootstrapSwaggerGen<TSwaggerCustomDocumentFilter>("v1", "API");
 
             services.AddSignalR(a =>
                 {
@@ -128,8 +129,8 @@ namespace Bakabase.Infrastructures.Components.App
 
             app.UseBootstrapCors(null);
 
-            app.UseSwagger(t => t.RouteTemplate = "internal-doc/swagger/{documentName}/swagger.json");
-
+            app.UseSwagger(t => { t.RouteTemplate = "/internal-doc/swagger/{documentName}/swagger.json"; });
+            app.UseSwaggerUI(t => { t.SwaggerEndpoint("/internal-doc/swagger/v1/swagger.json", "v1"); });
             // wwwroot
             app.UseStaticFiles();
 
