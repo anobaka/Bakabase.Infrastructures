@@ -24,10 +24,12 @@ namespace Bakabase.Infrastructures.Components.App.Migrations
         }
 
         /// <summary>
-        /// <inheritdoc cref="MaxVersion"/>
+        /// <inheritdoc cref="ApplyOnVersionEqualsOrBefore"/>
         /// </summary>
-        protected abstract string MaxVersionString { get; }
-        public SemVersion MaxVersion => SemVersion.Parse(MaxVersionString);
+        protected abstract string ApplyOnVersionEqualsOrBeforeString { get; }
+
+        public SemVersion ApplyOnVersionEqualsOrBefore =>
+            SemVersion.Parse(ApplyOnVersionEqualsOrBeforeString, SemVersionStyles.Any);
 
         protected virtual Task<object> MigrateBeforeDbMigrationInternal()
         {

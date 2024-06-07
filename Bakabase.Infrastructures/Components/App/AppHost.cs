@@ -81,8 +81,8 @@ namespace Bakabase.Infrastructures.Components.App
                 var prevVersion = await _appService.GetLastRunningVersion();
                 if (!AppConstants.InitialSemVersion.Equals(prevVersion))
                 {
-                    foreach (var m in migrators.Where(a => prevVersion.CompareSortOrderTo(a.MaxVersion) <= 0)
-                                 .OrderBy(a => a.MaxVersion))
+                    foreach (var m in migrators.Where(a => prevVersion.CompareSortOrderTo(a.ApplyOnVersionEqualsOrBefore) <= 0)
+                                 .OrderBy(a => a.ApplyOnVersionEqualsOrBefore))
                     {
                         Logger.LogInformation($"Applying [{m.GetType().Name}] migrations on {timing}");
                         switch (timing)
@@ -266,34 +266,45 @@ namespace Bakabase.Infrastructures.Components.App
 
                         Task.Run(async () =>
                         {
-                            _guiAdapter.ShowInitializationWindow(AppLocalizer.App_Cleaning());
-                            await appDataMover.RemovePreviousCoreData();
-
-                            _guiAdapter.ShowInitializationWindow(AppLocalizer.App_MakingBackups());
-                            await Backup(Host.Services);
-
-                            _guiAdapter.ShowInitializationWindow(AppLocalizer.App_Migrating());
-                            await Host.Services.MigrateSqliteDbContexts<LogDbContext>();
-
-                            await Migrate(Host.Services, MigrationTiming.BeforeDbMigration);
-                            await MigrateDb(Host.Services);
-                            await Migrate(Host.Services, MigrationTiming.AfterDbMigration);
-
-                            await _appOptionsManager.SaveAsync(t =>
+                            try
                             {
-                                t.Version = AppService.CoreVersion.ToString();
-                            });
+                                _guiAdapter.ShowInitializationWindow(AppLocalizer.App_Cleaning());
+                                await appDataMover.RemovePreviousCoreData();
 
-                            _guiAdapter.ShowInitializationWindow(AppLocalizer.App_FinishingUp());
-                            await ExecuteCustomProgress(Host.Services);
+                                _guiAdapter.ShowInitializationWindow(AppLocalizer.App_MakingBackups());
+                                await Backup(Host.Services);
 
-                            var jobManager = Host.Services.GetService<SimpleJobManager>();
-                            jobManager?.Start();
+                                _guiAdapter.ShowInitializationWindow(AppLocalizer.App_Migrating());
+                                await Host.Services.MigrateSqliteDbContexts<LogDbContext>();
 
-                            _guiAdapter.ShowMainWebView(address, $"{DisplayName} - {AppService.CoreVersion}",
-                                async () => await TryToExit(false));
+                                await Migrate(Host.Services, MigrationTiming.BeforeDbMigration);
+                                await MigrateDb(Host.Services);
+                                await Migrate(Host.Services, MigrationTiming.AfterDbMigration);
 
-                            _guiAdapter.DestroyInitializationWindow();
+                                await _appOptionsManager.SaveAsync(t =>
+                                {
+                                    t.Version = AppService.CoreVersion.ToString();
+                                });
+
+                                _guiAdapter.ShowInitializationWindow(AppLocalizer.App_FinishingUp());
+                                await ExecuteCustomProgress(Host.Services);
+
+                                var jobManager = Host.Services.GetService<SimpleJobManager>();
+                                jobManager?.Start();
+
+                                _guiAdapter.ShowMainWebView(address, $"{DisplayName} - {AppService.CoreVersion}",
+                                    async () => await TryToExit(false));
+
+                                _guiAdapter.DestroyInitializationWindow();
+                            }
+                            catch (Exception e)
+                            {
+                                // todo: same error handling as outer scope
+                                Logger?.LogError(e.BuildFullInformationText());
+                                _guiAdapter.ShowFatalErrorWindow(e.BuildFullInformationText(),
+                                    AppLocalizer?.App_FatalError() ?? "Fatal error");
+                            }
+
                         }).ConfigureAwait(false).GetAwaiter().GetResult();
 
                         #endregion
@@ -307,7 +318,8 @@ namespace Bakabase.Infrastructures.Components.App
             catch (Exception e)
             {
                 Logger?.LogError(e.BuildFullInformationText());
-                _guiAdapter.ShowFatalErrorWindow(e.BuildFullInformationText(), AppLocalizer?.App_FatalError() ?? "Fatal error");
+                _guiAdapter.ShowFatalErrorWindow(e.BuildFullInformationText(),
+                    AppLocalizer?.App_FatalError() ?? "Fatal error");
             }
         }
 

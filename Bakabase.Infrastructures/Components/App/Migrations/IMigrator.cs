@@ -10,9 +10,9 @@ namespace Bakabase.Infrastructures.Components.App.Migrations
     public interface IMigrator
     {
         /// <summary>
-        /// Migration begins from <see cref="MaxVersion"/> down to last running version.
+        /// Migration begins from <see cref="ApplyOnVersionEqualsOrBefore"/> down to last running version.
         /// </summary>
-        SemVersion MaxVersion { get; }
+        SemVersion ApplyOnVersionEqualsOrBefore { get; }
 
         /// <summary>
         /// 
