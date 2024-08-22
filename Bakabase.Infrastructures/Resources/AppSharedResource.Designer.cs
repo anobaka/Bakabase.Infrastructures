@@ -106,6 +106,15 @@ namespace Bakabase.Infrastructures.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to  Go to download.
+        /// </summary>
+        internal static string App_GoToDownload {
+            get {
+                return ResourceManager.GetString("App_GoToDownload", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Initializing....
         /// </summary>
         internal static string App_Initializing {
@@ -138,6 +147,15 @@ namespace Bakabase.Infrastructures.Resources {
         internal static string App_Minimize {
             get {
                 return ResourceManager.GetString("App_Minimize", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to To run this application, you need to install the WebView2 runtime (or Microsoft Edge browser)..
+        /// </summary>
+        internal static string App_MissingWebView2Tip {
+            get {
+                return ResourceManager.GetString("App_MissingWebView2Tip", resourceCulture);
             }
         }
         

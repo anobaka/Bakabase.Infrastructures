@@ -153,4 +153,10 @@
   <data name="App_Warning" xml:space="preserve">
     <value>Warning</value>
   </data>
+  <data name="App_MissingWebView2Tip" xml:space="preserve">
+    <value>To run this application, you need to install the WebView2 runtime (or Microsoft Edge browser).</value>
+  </data>
+  <data name="App_GoToDownload" xml:space="preserve">
+    <value> Go to download</value>
+  </data>
 </root>

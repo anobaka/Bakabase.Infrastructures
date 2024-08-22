@@ -153,4 +153,10 @@
   <data name="App_Warning" xml:space="preserve">
     <value>警告</value>
   </data>
+  <data name="App_MissingWebView2Tip" xml:space="preserve">
+    <value>要运行此应用程序，需要安装 WebView2 运行时（或者Microsoft Edge浏览器）。</value>
+  </data>
+  <data name="App_GoToDownload" xml:space="preserve">
+    <value>去下载</value>
+  </data>
 </root>

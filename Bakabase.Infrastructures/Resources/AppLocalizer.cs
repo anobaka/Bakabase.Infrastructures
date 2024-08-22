@@ -7,19 +7,11 @@ using Microsoft.Extensions.Localization;
 
 namespace Bakabase.Infrastructures.Resources
 {
-    public class AppLocalizer
+    public class AppLocalizer(IStringLocalizer<Infrastructures.AppSharedResource> localizer)
     {
-        private readonly IStringLocalizer<Infrastructures.AppSharedResource> _localizer;
+        public LocalizedString this[string name] => localizer[name];
 
-        public AppLocalizer(IStringLocalizer<Infrastructures.AppSharedResource> localizer)
-        {
-            _localizer = localizer;
-        }
-
-
-        public LocalizedString this[string name] => _localizer[name];
-
-        public LocalizedString this[string name, params object[] arguments] => _localizer[name, arguments];
+        public LocalizedString this[string name, params object[] arguments] => localizer[name, arguments];
 
         public string App_Initializing() => this[nameof(App_Initializing)];
         public string App_Cleaning() => this[nameof(App_Cleaning)];
@@ -33,5 +25,7 @@ namespace Bakabase.Infrastructures.Resources
         public string App_RememberMe() => this[nameof(App_RememberMe)];
         public string App_TipOnExit() => this[nameof(App_TipOnExit)];
         public string App_CriticalTasksRunningOnExit() => this[nameof(App_CriticalTasksRunningOnExit)];
+        public string App_MissingWebView2Tip() => this[nameof(App_MissingWebView2Tip)];
+        public string App_GoToDownload() => this[nameof(App_GoToDownload)];
     }
 }

@@ -85,7 +85,7 @@ namespace Bakabase.Infrastructures.Components.App
             services.AddSignalR(a =>
                 {
                     a.AddFilter<HubLogger>();
-                    a.MaximumParallelInvocationsPerClient = int.MaxValue;
+                    a.MaximumParallelInvocationsPerClient = 4;
                 })
                 .AddJsonProtocol(t => t.PayloadSerializerOptions.DictionaryKeyPolicy = null);
 
