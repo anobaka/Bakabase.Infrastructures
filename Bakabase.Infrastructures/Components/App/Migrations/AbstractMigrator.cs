@@ -25,6 +25,7 @@ namespace Bakabase.Infrastructures.Components.App.Migrations
 
         /// <summary>
         /// <inheritdoc cref="ApplyOnVersionEqualsOrBefore"/>
+        /// todo: change &lt;= to &lt;?
         /// </summary>
         protected abstract string ApplyOnVersionEqualsOrBeforeString { get; }
 

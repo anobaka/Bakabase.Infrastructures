@@ -208,10 +208,16 @@ namespace Bakabase.Infrastructures.Components.App
                 var initialOptions = await GetInitializationOptions();
 
                 AppService.SetCulture(initialOptions.Language);
-                _guiAdapter.ChangeUiTheme(_systemService.UiTheme);
+                var uiTheme = initialOptions.UiTheme == UiTheme.FollowSystem
+                    ? _systemService.UiTheme
+                    : initialOptions.UiTheme;
+                _guiAdapter.ChangeUiTheme(uiTheme);
                 _systemService.OnUiThemeChange += async (newTheme) =>
                 {
-                    _guiAdapter.ChangeUiTheme(newTheme);
+                    if (initialOptions.UiTheme == UiTheme.FollowSystem)
+                    {
+                        _guiAdapter.ChangeUiTheme(newTheme);
+                    }
                 };
 
                 Initialize();
