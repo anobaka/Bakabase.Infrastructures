@@ -180,7 +180,6 @@ namespace Bakabase.Infrastructures.Components.App
                 #region System-Scope Settings
 
                 options.Language = _systemService.Language;
-                options.UiTheme = _systemService.UiTheme;
 
                 Logger.LogInformation($"Settings for bakabase scope are not found, use system-scope settings, language: {options.Language}, ui theme: {options.UiTheme}");
 
@@ -209,7 +208,11 @@ namespace Bakabase.Infrastructures.Components.App
                 var initialOptions = await GetInitializationOptions();
 
                 AppService.SetCulture(initialOptions.Language);
-                _guiAdapter.ChangeUiTheme(initialOptions.UiTheme);
+                _guiAdapter.ChangeUiTheme(_systemService.UiTheme);
+                _systemService.OnUiThemeChange += async (newTheme) =>
+                {
+                    _guiAdapter.ChangeUiTheme(newTheme);
+                };
 
                 Initialize();
 
@@ -232,6 +235,11 @@ namespace Bakabase.Infrastructures.Components.App
 
                 _guiAdapter.ShowInitializationWindow(AppLocalizer.App_Initializing());
                 _guiAdapter.ShowTray(async () => await TryToExit(true));
+
+                // while (true)
+                // {
+                //     await Task.Delay(1000);
+                // }
 
                 await Task.Run(async () =>
                 {

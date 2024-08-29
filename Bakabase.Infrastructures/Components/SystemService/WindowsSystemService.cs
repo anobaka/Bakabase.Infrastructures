@@ -11,24 +11,50 @@ namespace Bakabase.Infrastructures.Components.SystemService
 {
     public class WindowsSystemService : ISystemService
     {
+        private UiTheme _uiTheme;
+
         public UiTheme UiTheme
         {
-            get
+            get => _uiTheme;
+            private set
             {
-                try
+                if (_uiTheme != value)
                 {
-                    var res = (int) Registry.GetValue(
-                        "HKEY_CURRENT_USER\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
-                        "AppsUseLightTheme", null);
-                    return res == 0 ? UiTheme.Dark : UiTheme.Light;
-                }
-                catch (Exception e)
-                {
-                    return UiTheme.FollowSystem;
+                    _uiTheme = value;
+                    OnUiThemeChange?.Invoke(_uiTheme);
                 }
             }
         }
 
         public string Language => CultureInfo.InstalledUICulture.Name;
+        public event Func<UiTheme, Task> OnUiThemeChange;
+
+        private void UpdateUiTheme()
+        {
+            try
+            {
+                var res = (int) Registry.GetValue(
+                    "HKEY_CURRENT_USER\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+                    "AppsUseLightTheme", null);
+                UiTheme = res == 0 ? UiTheme.Dark : UiTheme.Light;
+            }
+            catch (Exception e)
+            {
+                UiTheme = UiTheme.Light;
+            }
+        }
+
+        public WindowsSystemService()
+        {
+            UpdateUiTheme();
+
+            SystemEvents.UserPreferenceChanging += (sender, e) =>
+            {
+                if (e.Category == UserPreferenceCategory.General)
+                {
+                    UpdateUiTheme();
+                }
+            };
+        }
     }
 }

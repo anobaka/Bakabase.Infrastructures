@@ -11,5 +11,6 @@ namespace Bakabase.Infrastructures.Components.SystemService
     {
         UiTheme UiTheme { get; }
         string Language { get; }
+        public event Func<UiTheme, Task> OnUiThemeChange;
     }
 }
