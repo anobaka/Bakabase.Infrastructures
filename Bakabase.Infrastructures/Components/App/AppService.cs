@@ -42,11 +42,19 @@ namespace Bakabase.Infrastructures.Components.App
         {
             get
             {
-                var verStr = Assembly.GetEntryAssembly()
-                                 ?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ??
-                             AppConstants.InitialVersion;
-                verStr = verStr.Split('+').FirstOrDefault();
-                return SemVersion.Parse(verStr, SemVersionStyles.Any);
+                try
+                {
+                    var verStr = Assembly.GetEntryAssembly()
+                                     ?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+                                     ?.InformationalVersion ??
+                                 AppConstants.InitialVersion;
+                    verStr = verStr.Split('+').FirstOrDefault();
+                    return SemVersion.Parse(verStr, SemVersionStyles.Any);
+                }
+                catch
+                {
+                    return SemVersion.Parse(AppConstants.InitialVersion, SemVersionStyles.Any);
+                }
             }
         }
 
