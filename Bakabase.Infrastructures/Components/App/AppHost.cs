@@ -141,7 +141,7 @@ namespace Bakabase.Infrastructures.Components.App
 #if RELEASE
             for (var i = 0; i < ListeningPortCount; i++)
             {
-                listenPorts.Add(NetworkUtils.GetFreeTcpPortAfter(i == 0 ? 10000 : listenPorts[i - 1]));
+                listenPorts.Add(NetworkUtils.GetFreeTcpPortAfter(i == 0 ? 34567 : listenPorts[i - 1]));
             }
             
 #else
