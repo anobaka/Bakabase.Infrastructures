@@ -204,6 +204,7 @@ namespace Bakabase.Infrastructures.Components.App
 
         public string DataBackupDirectory => RequestAppDataDirectory("backups");
         public string TempFilesPath => RequestAppDataDirectory("temp");
+        public string DataFilesPath => RequestAppDataDirectory("data");
         public string ComponentsPath => RequestAppDataDirectory("components");
 
         public async Task<SemVersion> GetLastRunningVersion() =>
@@ -220,7 +221,7 @@ namespace Bakabase.Infrastructures.Components.App
                 var targetRootDir =
                     Directory.CreateDirectory(Path.Combine(DataBackupDirectory, prevVersion.ToString()!));
                 var ignoredDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-                    {DataBackupDirectory, TempFilesPath, ComponentsPath};
+                    {DataBackupDirectory, TempFilesPath, ComponentsPath, DataFilesPath};
                 // dirs
                 foreach (var dir in Directory.GetDirectories(AppDataDirectory).Where(a => !ignoredDirs.Contains(a)))
                 {
