@@ -121,13 +121,14 @@ namespace Bakabase.Infrastructures.Components.App
 
         public virtual void Configure(IApplicationBuilder app, IHostApplicationLifetime lifetime)
         {
+            var listeningAddresses = app.ServerFeatures.Get<IServerAddressesFeature>().Addresses.ToArray();
+
             lifetime.ApplicationStarted.Register(() =>
             {
-                app.ApplicationServices.GetRequiredService<AppContext>().ServerAddresses =
-                    app.ServerFeatures.Get<IServerAddressesFeature>().Addresses.ToArray();
+                app.ApplicationServices.GetRequiredService<AppContext>().ServerAddresses = listeningAddresses;
             });
 
-            app.UseBootstrapCors(null);
+            app.UseBootstrapCors(null, listeningAddresses);
 
             app.UseSwagger(t => { t.RouteTemplate = "/internal-doc/swagger/{documentName}/swagger.json"; });
             app.UseSwaggerUI(t => { t.SwaggerEndpoint("/internal-doc/swagger/v1/swagger.json", "v1"); });
