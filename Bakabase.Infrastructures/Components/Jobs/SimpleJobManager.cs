@@ -48,7 +48,7 @@ namespace Bakabase.Infrastructures.Components.Jobs
 
         protected Task ScheduleJob<TJob>(Action<SimpleScheduleBuilder> ssb) where TJob : IJob
         {
-            return ScheduleJob<TJob>(tb => tb.WithSimpleSchedule(ssb));
+            return ScheduleJob<TJob>(tb => tb.WithSimpleSchedule(ssb).StartAt(DateTimeOffset.Now.AddMinutes(0.25)));
         }
 
         protected async Task ScheduleJob<TJob>(Func<TriggerBuilder, TriggerBuilder> configure) where TJob : IJob

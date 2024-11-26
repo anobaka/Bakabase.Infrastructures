@@ -226,7 +226,10 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade.Abstractions
             }
             finally
             {
-                _cts?.Cancel();
+                if (_cts != null)
+                {
+                    await _cts.CancelAsync();
+                }
             }
         }
 
