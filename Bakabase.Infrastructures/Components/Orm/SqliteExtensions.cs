@@ -15,10 +15,13 @@ namespace Bakabase.Infrastructures.Components.Orm
             var ds = Path.Combine(appDataPath, $"{Path.GetFileNameWithoutExtension(filenameWithoutExtension)}.db");
             var dir = Path.GetDirectoryName(ds)!;
             Directory.CreateDirectory(dir);
-            var connectionStringBuilder = new SqliteConnectionStringBuilder {DataSource = ds};
+            var connectionStringBuilder = new SqliteConnectionStringBuilder {DataSource = ds };
             var connectionString = connectionStringBuilder.ToString();
             var conn = new SqliteConnection(connectionString);
-            builder.UseSqlite(conn, t => { });
+            builder.UseSqlite(conn, t =>
+            {
+                t.CommandTimeout(10);
+            });
             builder.EnableSensitiveDataLogging();
         }
 
@@ -31,6 +34,7 @@ namespace Bakabase.Infrastructures.Components.Orm
 
             await db.Database.OpenConnectionAsync();
             // This two pragmas below are persistent, and cache_size is working with current connection.
+            await db.Database.ExecuteSqlRawAsync($"PRAGMA journal_mode = WAL;");
             await db.Database.ExecuteSqlRawAsync($"PRAGMA encoding = 'UTF-16';PRAGMA page_size = {65536};");
             await db.Database.MigrateAsync();
         }
