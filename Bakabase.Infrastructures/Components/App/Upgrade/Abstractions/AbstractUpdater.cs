@@ -73,7 +73,7 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade.Abstractions
 
             versions = versions.Where(a =>
                 (includePreRelease || string.IsNullOrEmpty(a.Version.Prerelease)) &&
-                (minimalVersion == null || a.Version > minimalVersion)).ToArray();
+                (minimalVersion == null || a.Version.ComparePrecedenceTo(minimalVersion) > 0)).ToArray();
 
             var version = versions.Any() ? versions.FirstOrDefault().Version : null;
             if (version == null)
