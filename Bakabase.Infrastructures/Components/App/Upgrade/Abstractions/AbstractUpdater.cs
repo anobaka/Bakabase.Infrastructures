@@ -69,7 +69,7 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade.Abstractions
                 {
                     var versionString = Path.GetFileName(a.TrimEnd('/').TrimStart('v'));
                     return (Prefix: a, Version: SemVersion.TryParse(versionString, out var v) ? v : null);
-                }).Where(a => a.Version != null).OrderByDescending(a => a.Version).ToArray();
+                }).Where(a => a.Version != null).OrderByDescending(a => a.Version, SemVersion.SortOrderComparer).ToArray();
 
             versions = versions.Where(a =>
                 (includePreRelease || string.IsNullOrEmpty(a.Version.Prerelease)) &&
