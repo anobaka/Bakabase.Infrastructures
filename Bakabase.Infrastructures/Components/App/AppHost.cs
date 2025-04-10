@@ -61,7 +61,8 @@ namespace Bakabase.Infrastructures.Components.App
         protected async Task Migrate(IServiceProvider serviceProvider, MigrationTiming timing)
         {
             Logger.LogInformation($"Applying migrations on timing: {timing}");
-            var migrators = serviceProvider.GetService<IEnumerable<IMigrator>>()?.ToArray();
+            await using var scope = serviceProvider.CreateAsyncScope();
+            var migrators = scope.ServiceProvider.GetRequiredService<IEnumerable<IMigrator>>()?.ToArray();
             if (migrators?.Any() == true)
             {
                 var prevVersion = await _appService.GetLastRunningVersion();
