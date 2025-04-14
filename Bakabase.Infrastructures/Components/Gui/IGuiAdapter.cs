@@ -7,9 +7,15 @@ namespace Bakabase.Infrastructures.Components.Gui
 {
     public interface IGuiAdapter
     {
-        [ItemCanBeNull] string[] OpenFilesSelector(string? initialDirectory = null);
-        [CanBeNull] string OpenFileSelector(string? initialDirectory = null);
-        [CanBeNull] string OpenFolderSelector(string? initialDirectory = null);
+        [ItemCanBeNull]
+        string[] OpenFilesSelector(string? initialDirectory = null);
+
+        [CanBeNull]
+        string OpenFileSelector(string? initialDirectory = null);
+
+        [CanBeNull]
+        string OpenFolderSelector(string? initialDirectory = null);
+
         string GetDownloadsDirectory();
         void ShowTray(Func<Task> onExiting);
         void HideTray();
@@ -27,5 +33,13 @@ namespace Bakabase.Infrastructures.Components.Gui
         void ShowConfirmationDialogOnFirstTimeExiting(Func<CloseBehavior, bool, Task> onClosed);
         bool ShowConfirmDialog(string message, string caption);
         void ChangeUiTheme(UiTheme theme);
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="type"></param>
+        /// <param name="path">Must not be null or empty if <see cref="type"/> is <see cref="IconType.Dynamic"/></param>
+        /// <returns></returns>
+        [CanBeNull] byte[] GetIcon(IconType type, [CanBeNull] string path);
     }
 }

@@ -34,5 +34,6 @@ namespace Bakabase.Infrastructures.Components.Gui
         public abstract void ShowConfirmationDialogOnFirstTimeExiting(Func<CloseBehavior, bool, Task> onClosed);
         public abstract bool ShowConfirmDialog(string message, string caption);
         public abstract void ChangeUiTheme(UiTheme theme);
+        [CanBeNull] public abstract byte[] GetIcon(IconType type, string path);
     }
 }
