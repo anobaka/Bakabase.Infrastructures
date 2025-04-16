@@ -15,12 +15,15 @@ using Bootstrap.Components.Configuration.Abstractions;
 using Bootstrap.Components.Configuration.Helpers;
 using Bootstrap.Components.Logging.LogService;
 using Bootstrap.Extensions;
+using CommandLine;
+using CommandLine.Text;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 
 namespace Bakabase.Infrastructures.Components.App
 {
@@ -98,7 +101,7 @@ namespace Bakabase.Infrastructures.Components.App
             return Task.CompletedTask;
         }
 
-        private IHost CreateHost(string[] args, ConfigurationRegistrations configurationRegistrations)
+        private IHost CreateHost(string[] args, ConfigurationRegistrations configurationRegistrations, AppCliOptions cliOptions)
         {
             // {DataPath ?? AppData}/configs/*
             var optionsDescribers =
@@ -142,7 +145,7 @@ namespace Bakabase.Infrastructures.Components.App
 #if RELEASE
             for (var i = 0; i < ListeningPortCount; i++)
             {
-                listenPorts.Add(NetworkUtils.GetFreeTcpPortAfter(i == 0 ? 34567 : listenPorts[i - 1]));
+                listenPorts.Add(NetworkUtils.GetFreeTcpPortAfter(i == 0 ? cliOptions.StartPort : listenPorts[i - 1]));
             }
             
 #else
@@ -194,6 +197,27 @@ namespace Bakabase.Infrastructures.Components.App
         {
             try
             {
+                var parseResult = Parser.Default.ParseArguments<AppCliOptions>(args);
+
+                AppCliOptions cliOptions = null;
+                parseResult.WithParsed(x =>
+                {
+                    cliOptions = x;
+                }).WithNotParsed(errors =>
+                {
+                    // var helpText = HelpText.AutoBuild(parseResult, h =>
+                    // {
+                    //     h.AdditionalNewLineAfterOption = false;
+                    //     h.Heading = DisplayName; //change header
+                    //     // h.Copyright = "Copyright (c) 2019 Global.com"; //change copyright text
+                    //     h.AddPostOptionsLine("Default options is used due to failed to parse arguments.");
+                    //     return HelpText.DefaultParsingErrorsHandler(parseResult, h);
+                    // }, e => e);
+                    cliOptions = new AppCliOptions();
+                });
+
+                Console.WriteLine($"Start app with cli options: {JsonConvert.SerializeObject(cliOptions)}");
+
                 #region Initialize host services
 
                 var fallbackSc = new ServiceCollection();
@@ -233,7 +257,7 @@ namespace Bakabase.Infrastructures.Components.App
                     }
                 }
 
-                Host = CreateHost(args, cr);
+                Host = CreateHost(args, cr, cliOptions);
 
                 _appService = Host.Services.GetRequiredService<AppService>();
                 _appOptionsManager = Host.Services.GetRequiredService<IBOptionsManager<AppOptions>>();
