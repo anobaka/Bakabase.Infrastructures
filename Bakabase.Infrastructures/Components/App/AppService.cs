@@ -151,6 +151,7 @@ namespace Bakabase.Infrastructures.Components.App
                 },
                 DateFormatString = "yyyy-MM-dd HH:mm:ss.fff",
                 ReferenceLoopHandling = ReferenceLoopHandling.Ignore,
+                NullValueHandling = NullValueHandling.Ignore
             };
 
             var logPath = Path.Combine(LogPath ?? "logs", "AppLog_.log");
