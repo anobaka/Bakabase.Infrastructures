@@ -101,7 +101,8 @@ namespace Bakabase.Infrastructures.Components.App
             return Task.CompletedTask;
         }
 
-        private IHost CreateHost(string[] args, ConfigurationRegistrations configurationRegistrations, AppCliOptions cliOptions)
+        private IHost CreateHost(string[] args, ConfigurationRegistrations configurationRegistrations,
+            AppOptions initOptions, AppCliOptions cliOptions)
         {
             // {DataPath ?? AppData}/configs/*
             var optionsDescribers =
@@ -142,23 +143,24 @@ namespace Bakabase.Infrastructures.Components.App
                 });
 
             var listenPorts = new List<int>();
-#if RELEASE
-            for (var i = 0; i < ListeningPortCount; i++)
+            if (initOptions.ListeningPort.HasValue)
             {
-                listenPorts.Add(NetworkUtils.GetFreeTcpPortAfter(i == 0 ? cliOptions.StartPort : listenPorts[i - 1]));
+                listenPorts.Add(initOptions.ListeningPort.Value);
             }
-            
-#else
+#if !RELEASE
             listenPorts.Add(5000);
+#endif
+            var startPort = listenPorts.Any() ? listenPorts.Last() : cliOptions.StartPort;
             for (var i = 1; i < ListeningPortCount; i++)
             {
-                listenPorts.Add(NetworkUtils.GetFreeTcpPortAfter(listenPorts[i - 1]));
+                startPort = NetworkUtils.GetFreeTcpPortAfter(startPort);
+                listenPorts.Add(startPort);
             }
-#endif
+
             hostBuilder = hostBuilder.ConfigureWebHost(t =>
-                t.UseUrls(listenPorts.Select(p => $"http://localhost:{p}").ToArray()));
+                t.UseUrls(listenPorts.SelectMany(p => new[]{ $"http://0.0.0.0:{p}" , $"http://localhost:{p}" }).ToArray()));
             return hostBuilder.Build();
-        }
+        } 
 
         private AppService _appService;
         private IBOptionsManager<AppOptions> _appOptionsManager;
@@ -257,7 +259,7 @@ namespace Bakabase.Infrastructures.Components.App
                     }
                 }
 
-                Host = CreateHost(args, cr, cliOptions);
+                Host = CreateHost(args, cr, initialOptions, cliOptions);
 
                 _appService = Host.Services.GetRequiredService<AppService>();
                 _appOptionsManager = Host.Services.GetRequiredService<IBOptionsManager<AppOptions>>();

@@ -9,5 +9,6 @@ namespace Bakabase.Infrastructures.Components.App.Models.RequestModels
         public bool? EnableAnonymousDataTracking { get; set; }
         public CloseBehavior? CloseBehavior { get; set; }
         public UiTheme? UiTheme { get; set; }
+        public int? ListeningPort { get; set; }
     }
 }

@@ -19,6 +19,7 @@ namespace Bakabase.Infrastructures.Components.Configurations.App
         public string PrevDataPath { get; set; }
         public CloseBehavior CloseBehavior { get; set; } = CloseBehavior.Prompt;
         public UiTheme UiTheme { get; set; }
+        public int? ListeningPort { get; set; }
 
         public bool IsNotInitialized() => Version == AppConstants.InitialVersion;
     }

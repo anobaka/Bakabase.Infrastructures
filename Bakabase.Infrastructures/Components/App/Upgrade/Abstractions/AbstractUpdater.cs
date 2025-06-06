@@ -29,9 +29,28 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade.Abstractions
     {
         private OssClient _ossClient;
 
-        private OssClient OssClient => _ossClient ??= new OssClient(Options.Value.OssEndpoint,
-            Options.Value.OssAccessKeyId, Options.Value.OssAccessKeySecret);
+        private OssClient OssClient
+        {
+            get
+            {
+                try
+                {
+                    _ossClient = new OssClient(Options.Value.OssEndpoint,
+                        Options.Value.OssAccessKeyId, Options.Value.OssAccessKeySecret);
+                    IsReady = true;
+                    Error = null;
+                }
+                catch (Exception e)
+                {
+                    IsReady = false;
+                    Error = e.BuildFullInformationText();
+                }
 
+                return _ossClient;
+            }   
+        }
+        public bool IsReady { get; protected set; }
+        [CanBeNull] public string Error { get; set; }
         private readonly OssDownloader _downloader;
         protected readonly ILogger<AbstractUpdater> Logger;
         private CancellationTokenSource _cts;
@@ -46,7 +65,6 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade.Abstractions
         protected IBOptionsManager<UpdaterOptions> UpdaterOptionsManager { get; }
         protected IBOptionsManager<AppOptions> AppOptionsManager { get; }
         protected abstract string OssObjectPrefix { get; }
-
         protected AbstractUpdater(OssDownloader downloader, ILogger<AbstractUpdater> logger, AppService appService,
             IBOptionsManager<UpdaterOptions> updaterOptionsManager, IBOptionsManager<AppOptions> appOptionsManager)
         {
@@ -57,8 +75,14 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade.Abstractions
             AppOptionsManager = appOptionsManager;
         }
 
+        [CanBeNull]
         private AppVersionInfo CheckNewVersion(SemVersion minimalVersion, bool includePreRelease)
         {
+            if (!IsReady)
+            {
+                return null;
+            }
+
             var versionPaths = OssClient.ListObjects(new ListObjectsRequest(Options.Value.OssBucket)
             {
                 Prefix = OssObjectPrefix,
