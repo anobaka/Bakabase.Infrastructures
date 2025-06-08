@@ -23,6 +23,7 @@ using Bootstrap.Extensions;
 using Bootstrap.Models.Constants;
 using Bootstrap.Models.Exceptions;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
@@ -119,6 +120,11 @@ namespace Bakabase.Infrastructures.Components.App
 
         }
 
+        protected virtual void ConfigureCors(CorsPolicyBuilder builder)
+        {
+
+        }
+
         public virtual void Configure(IApplicationBuilder app, IHostApplicationLifetime lifetime)
         {
             var listeningAddresses = app.ServerFeatures.Get<IServerAddressesFeature>().Addresses.ToArray();
@@ -128,7 +134,7 @@ namespace Bakabase.Infrastructures.Components.App
                 app.ApplicationServices.GetRequiredService<AppContext>().ServerAddresses = listeningAddresses;
             });
 
-            app.UseBootstrapCors(null, listeningAddresses);
+            app.UseBootstrapCors(ConfigureCors, listeningAddresses);
 
             app.UseSwagger(t => { t.RouteTemplate = "/internal-doc/swagger/{documentName}/swagger.json"; });
             app.UseSwaggerUI(t => { t.SwaggerEndpoint("/internal-doc/swagger/v1/swagger.json", "v1"); });
