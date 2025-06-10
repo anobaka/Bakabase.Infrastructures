@@ -165,30 +165,37 @@ namespace Bakabase.Infrastructures.Components.App
 
             app.UseRouting();
 
+#if RELEASE
+
+            app.UseSpaStaticFiles();
+
+            app.MapWhen(context => context.Request.Path == "/", spaApp =>
+            {
+                spaApp.UseSpa(spa =>
+                {
+                    spa.Options.SourcePath = "ClientApp/build";
+                    spa.Options.DefaultPageStaticFileOptions = new StaticFileOptions()
+                    {
+                        OnPrepareResponse = ctx =>
+                        {
+                            var headers = ctx.Context.Response.GetTypedHeaders();
+                            headers.CacheControl = new CacheControlHeaderValue
+                            {
+                                Public = true,
+                                MaxAge = TimeSpan.FromDays(0)
+                            };
+                        },
+                    };
+                });
+            });
+
+#endif
+
             app.UseEndpoints(endpoints =>
             {
                 ConfigureEndpointsAtFirst(endpoints);
                 endpoints.MapSimpleProgressorHub("/hub/progressor");
                 endpoints.MapDefaultControllerRoute();
-            });
-
-            app.UseSpaStaticFiles();
-
-            app.UseSpa(spa =>
-            {
-                spa.Options.SourcePath = "ClientApp/build";
-                spa.Options.DefaultPageStaticFileOptions = new StaticFileOptions()
-                {
-                    OnPrepareResponse = ctx =>
-                    {
-                        var headers = ctx.Context.Response.GetTypedHeaders();
-                        headers.CacheControl = new CacheControlHeaderValue
-                        {
-                            Public = true,
-                            MaxAge = TimeSpan.FromDays(0)
-                        };
-                    },
-                };
             });
         }
     }
