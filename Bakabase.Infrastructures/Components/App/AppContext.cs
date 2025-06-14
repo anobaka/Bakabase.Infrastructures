@@ -1,13 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using JetBrains.Annotations;
 
-namespace Bakabase.Infrastructures.Components.App
+namespace Bakabase.Infrastructures.Components.App;
+
+public record AppContext
 {
-    public record AppContext
-    {
-        public string[] ServerAddresses { get; set; }
-    }
+    public string[] ListeningAddresses { get; set; }
+    [CanBeNull] public string ApiEndpoint { get; set; }
 }
