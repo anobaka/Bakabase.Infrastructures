@@ -158,7 +158,7 @@ namespace Bakabase.Infrastructures.Components.App
             }
 
             hostBuilder = hostBuilder.ConfigureWebHost(t =>
-                t.UseUrls(listenPorts.SelectMany(p => new[]{ $"http://0.0.0.0:{p}" , $"http://localhost:{p}" }).ToArray()));
+                t.UseUrls(listenPorts.SelectMany(p => new[]{ $"http://localhost:{p}", $"http://0.0.0.0:{p}"}).ToArray()));
             return hostBuilder.Build();
         } 
 
