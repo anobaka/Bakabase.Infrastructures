@@ -285,7 +285,7 @@ namespace Bakabase.Infrastructures.Components.App
                         var server = Host.Services.GetRequiredService<IServer>();
                         var features = server.Features;
                         var address = features.Get<IServerAddressesFeature>()!
-                            .Addresses.FirstOrDefault();
+                            .Addresses.FirstOrDefault(x => !x.Contains("0.0.0.0"));
 #endif
                         address = OverrideFeAddress(address);
 
