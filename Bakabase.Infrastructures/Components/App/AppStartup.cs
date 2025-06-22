@@ -123,7 +123,8 @@ public abstract class AppStartup<TSwaggerCustomDocumentFilter>
         {
             var appCtx = app.ApplicationServices.GetRequiredService<AppContext>();
             appCtx.ListeningAddresses = listeningAddresses;
-            appCtx.ApiEndpoint = listeningAddresses.FirstOrDefault(x => !x.Contains("0.0.0.0"));
+            appCtx.ApiEndpoints = listeningAddresses.Where(x => !x.Contains("0.0.0.0")).ToArray();
+            appCtx.ApiEndpoint = appCtx.ApiEndpoints.FirstOrDefault();
         });
 
         app.UseBootstrapCors(ConfigureCors, listeningAddresses);
