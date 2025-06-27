@@ -134,7 +134,8 @@ namespace Bakabase.Infrastructures.Components.App
                 {
                     collection.AddTransient(sp => _guiAdapter)
                         .AddSingleton<AppDataMover>()
-                        .AddSingleton<AppService>();
+                        .AddSingleton<AppService>()
+                        .AddSingleton(_systemService);
 
                     foreach (var d in optionsDescribers)
                     {
