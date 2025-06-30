@@ -14,6 +14,6 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade.Adapters
     public interface IBakabaseUpdater
     {
         Task StartUpdater(int pid, string processName, string appDir, string newFilesDir, string executable,
-            [CanBeNull] AppVersionInfo.Installer installer);
+            AppVersionInfo.Installer? installer);
     }
 }

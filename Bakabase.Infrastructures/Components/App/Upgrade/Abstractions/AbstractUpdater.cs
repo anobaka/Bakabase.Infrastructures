@@ -27,9 +27,9 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade.Abstractions
 {
     public abstract class AbstractUpdater
     {
-        private OssClient _ossClient;
+        private OssClient? _ossClient;
 
-        private OssClient OssClient
+        private OssClient? OssClient
         {
             get
             {
@@ -50,10 +50,10 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade.Abstractions
             }   
         }
         public bool IsReady { get; protected set; }
-        [CanBeNull] public string Error { get; set; }
+        public string? Error { get; set; }
         private readonly OssDownloader _downloader;
         protected readonly ILogger<AbstractUpdater> Logger;
-        private CancellationTokenSource _cts;
+        private CancellationTokenSource? _cts;
         public UpdaterState State { protected set; get; } = new() {Status = UpdaterStatus.Idle};
         protected virtual Task<bool> GetEnablePreReleaseChannel() => Task.FromResult(false);
         protected abstract SemVersion CurrentVersion { get; }
@@ -75,31 +75,30 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade.Abstractions
             AppOptionsManager = appOptionsManager;
         }
 
-        [CanBeNull]
-        private AppVersionInfo CheckNewVersion(SemVersion minimalVersion, bool includePreRelease)
+        private AppVersionInfo? CheckNewVersion(SemVersion? minimalVersion, bool includePreRelease)
         {
             if (!IsReady)
             {
                 return null;
             }
 
-            var versionPaths = OssClient.ListObjects(new ListObjectsRequest(Options.Value.OssBucket)
+            var versionPaths = OssClient?.ListObjects(new ListObjectsRequest(Options.Value.OssBucket)
             {
                 Prefix = OssObjectPrefix,
                 Delimiter = "/"
             });
-            var versions = versionPaths.CommonPrefixes.Where(a => a.EndsWith('/'))
+            var versions = versionPaths?.CommonPrefixes.Where(a => a.EndsWith('/'))
                 .Select(a =>
                 {
                     var versionString = Path.GetFileName(a.TrimEnd('/').TrimStart('v'));
                     return (Prefix: a, Version: SemVersion.TryParse(versionString, out var v) ? v : null);
                 }).Where(a => a.Version != null).OrderByDescending(a => a.Version, SemVersion.SortOrderComparer).ToArray();
 
-            versions = versions.Where(a =>
-                (includePreRelease || string.IsNullOrEmpty(a.Version.Prerelease)) &&
+            versions = versions?.Where(a =>
+                (includePreRelease || string.IsNullOrEmpty(a.Version?.Prerelease)) &&
                 (minimalVersion == null || a.Version.ComparePrecedenceTo(minimalVersion) > 0)).ToArray();
 
-            var version = versions.Any() ? versions.FirstOrDefault().Version : null;
+            var version = versions?.Any() == true ? versions.FirstOrDefault().Version : null;
             if (version == null)
             {
                 return null;
@@ -127,7 +126,7 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade.Abstractions
         {
             var remoteFiles = new List<OssObjectSummary>();
             const int pageSize = 1000;
-            ObjectListing result = null;
+            ObjectListing? result = null;
             do
             {
                 // 每页列举的文件个数通过mMxKeys指定，超出指定数量的文件将分页显示。
@@ -137,14 +136,14 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade.Abstractions
                     Marker = result?.NextMarker,
                     MaxKeys = pageSize
                 };
-                result = OssClient.ListObjects(listObjectsRequest);
-                remoteFiles.AddRange(result.ObjectSummaries.Where(a => a.Size > 0));
+                result = OssClient?.ListObjects(listObjectsRequest);
+                remoteFiles.AddRange(result?.ObjectSummaries.Where(a => a.Size > 0) ?? []);
             } while (result.IsTruncated);
 
             return remoteFiles.ToArray();
         }
 
-        public async Task<AppVersionInfo> CheckNewVersion() =>
+        public async Task<AppVersionInfo?> CheckNewVersion() =>
             CheckNewVersion(CurrentVersion, await GetEnablePreReleaseChannel());
 
         public async Task<BaseResponse> StartUpdating()
@@ -277,6 +276,6 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade.Abstractions
             }
         }
 
-        [CanBeNull] public event Func<UpdaterState, Task> OnStateChange;
+        public event Func<UpdaterState, Task>? OnStateChange;
     }
 }

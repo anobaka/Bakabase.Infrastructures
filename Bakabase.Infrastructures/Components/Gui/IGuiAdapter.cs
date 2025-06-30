@@ -7,14 +7,11 @@ namespace Bakabase.Infrastructures.Components.Gui
 {
     public interface IGuiAdapter
     {
-        [ItemCanBeNull]
-        string[] OpenFilesSelector(string? initialDirectory = null);
+        string[]? OpenFilesSelector(string? initialDirectory = null);
 
-        [CanBeNull]
-        string OpenFileSelector(string? initialDirectory = null);
+        string? OpenFileSelector(string? initialDirectory = null);
 
-        [CanBeNull]
-        string OpenFolderSelector(string? initialDirectory = null);
+        string? OpenFolderSelector(string? initialDirectory = null);
 
         string GetDownloadsDirectory();
         void ShowTray(Func<Task> onExiting);
@@ -40,6 +37,6 @@ namespace Bakabase.Infrastructures.Components.Gui
         /// <param name="type"></param>
         /// <param name="path">Must not be null or empty if <see cref="type"/> is <see cref="IconType.Dynamic"/></param>
         /// <returns></returns>
-        [CanBeNull] byte[] GetIcon(IconType type, [CanBeNull] string path);
+        byte[]? GetIcon(IconType type, string? path);
     }
 }

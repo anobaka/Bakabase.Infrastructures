@@ -81,7 +81,7 @@ namespace Bakabase.Infrastructures.Components.App
             }
         }
 
-        internal static string LogPath
+        internal static string? LogPath
         {
             get
             {

@@ -13,9 +13,9 @@ namespace Bakabase.Infrastructures.Components.Gui
     {
         public abstract void InvokeInGuiContext(Action action);
         public abstract T InvokeInGuiContext<T>(Func<T> func);
-        public abstract string[] OpenFilesSelector(string? initialDirectory = null);
-        public abstract string OpenFileSelector(string? initialDirectory = null);
-        public abstract string OpenFolderSelector(string? initialDirectory = null);
+        public abstract string[]? OpenFilesSelector(string? initialDirectory = null);
+        public abstract string? OpenFileSelector(string? initialDirectory = null);
+        public abstract string? OpenFolderSelector(string? initialDirectory = null);
         public abstract string GetDownloadsDirectory();
         public abstract void ShowTray(Func<Task> onExiting);
         public abstract void HideTray();
@@ -34,6 +34,6 @@ namespace Bakabase.Infrastructures.Components.Gui
         public abstract void ShowConfirmationDialogOnFirstTimeExiting(Func<CloseBehavior, bool, Task> onClosed);
         public abstract bool ShowConfirmDialog(string message, string caption);
         public abstract void ChangeUiTheme(UiTheme theme);
-        [CanBeNull] public abstract byte[] GetIcon(IconType type, string path);
+        public abstract byte[]? GetIcon(IconType type, string path);
     }
 }

@@ -2,11 +2,11 @@
 {
     public class AppInfo
     {
-        public string AppDataPath { get; set; }
-        public string CoreVersion { get; set; }
-        public string LogPath { get; set; }
-        public string BackupPath { get; set; }
-        public string TempFilesPath { get; set; }
+        public string AppDataPath { get; set; } = null!;
+        public string CoreVersion { get; set; } = null!;
+        public string? LogPath { get; set; }
+        public string BackupPath { get; set; } = null!;
+        public string TempFilesPath { get; set; } = null!;
         public bool NotAcceptTerms { get; set; }
         public bool NeedRestart { get; set; }
     }

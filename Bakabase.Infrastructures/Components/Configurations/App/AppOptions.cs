@@ -10,13 +10,13 @@ namespace Bakabase.Infrastructures.Components.Configurations.App
     [Options]
     public sealed class AppOptions
     {
-        public string Language { get; set; }
+        public string Language { get; set; } = null!;
         public string Version { get; set; } = AppConstants.InitialVersion;
         public bool EnablePreReleaseChannel { get; set; }
         public bool EnableAnonymousDataTracking { get; set; } = true;
-        public string WwwRootPath { get; set; }
-        public string DataPath { get; set; }
-        public string PrevDataPath { get; set; }
+        public string WwwRootPath { get; set; } = null!;
+        public string DataPath { get; set; } = null!;
+        public string PrevDataPath { get; set; } = null!;
         public CloseBehavior CloseBehavior { get; set; } = CloseBehavior.Prompt;
         public UiTheme UiTheme { get; set; }
         public int? ListeningPort { get; set; }

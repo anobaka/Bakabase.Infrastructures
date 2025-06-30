@@ -13,8 +13,8 @@ namespace Bakabase.Infrastructures.Components.App.Migrations
     {
         private readonly IServiceProvider _serviceProvider;
         private IServiceProvider _scopedServiceProvider;
-        protected TService GetRequiredService<TService>() => _scopedServiceProvider.GetRequiredService<TService>();
-        private object _context;
+        protected TService GetRequiredService<TService>() where TService : notnull => _scopedServiceProvider.GetRequiredService<TService>();
+        private object? _context;
         protected ILogger Logger { get; }
 
         protected AbstractMigrator(IServiceProvider serviceProvider)
@@ -32,9 +32,9 @@ namespace Bakabase.Infrastructures.Components.App.Migrations
         public SemVersion ApplyOnVersionEqualsOrBefore =>
             SemVersion.Parse(ApplyOnVersionEqualsOrBeforeString, SemVersionStyles.Any);
 
-        protected virtual Task<object> MigrateBeforeDbMigrationInternal()
+        protected virtual Task<object?> MigrateBeforeDbMigrationInternal()
         {
-            return Task.FromResult<object>(null);
+            return Task.FromResult<object?>(null);
         }
 
         /// <summary>
@@ -51,7 +51,7 @@ namespace Bakabase.Infrastructures.Components.App.Migrations
         }
 
 
-        protected virtual Task MigrateAfterDbMigrationInternal(object context)
+        protected virtual Task MigrateAfterDbMigrationInternal(object? context)
         {
             return Task.CompletedTask;
         }

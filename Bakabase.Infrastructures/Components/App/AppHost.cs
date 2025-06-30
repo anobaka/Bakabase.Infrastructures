@@ -202,7 +202,7 @@ namespace Bakabase.Infrastructures.Components.App
             {
                 var parseResult = Parser.Default.ParseArguments<AppCliOptions>(args);
 
-                AppCliOptions cliOptions = null;
+                AppCliOptions? cliOptions = null;
                 parseResult.WithParsed(x =>
                 {
                     cliOptions = x;
@@ -252,15 +252,12 @@ namespace Bakabase.Infrastructures.Components.App
 
                 var cr = new ConfigurationRegistrations();
                 cr.AddApplicationPart(SpecificTypeUtils<AppOptions>.Type.Assembly);
-                if (AssembliesForGlobalConfigurationRegistrationsScanning != null)
+                foreach (var assembly in AssembliesForGlobalConfigurationRegistrationsScanning)
                 {
-                    foreach (var assembly in AssembliesForGlobalConfigurationRegistrationsScanning)
-                    {
-                        cr.AddApplicationPart(assembly);
-                    }
+                    cr.AddApplicationPart(assembly);
                 }
 
-                Host = CreateHost(args, cr, initialOptions, cliOptions);
+                Host = CreateHost(args, cr, initialOptions, cliOptions!);
 
                 _appService = Host.Services.GetRequiredService<AppService>();
                 _appOptionsManager = Host.Services.GetRequiredService<IBOptionsManager<AppOptions>>();
@@ -358,7 +355,7 @@ namespace Bakabase.Infrastructures.Components.App
         /// <exception cref="ArgumentOutOfRangeException"></exception>
         private async Task TryToExit(bool fromTray)
         {
-            AppOptions appOptions = null;
+            AppOptions? appOptions = null;
 
             if (!fromTray)
             {

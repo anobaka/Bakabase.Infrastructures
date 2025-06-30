@@ -24,7 +24,7 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade.Abstractions
 
         public DateTime StartDt { get; set; }
 
-        public string Error { get; set; }
+        public string? Error { get; set; }
         public UpdaterStatus Status { get; set; }
 
         public void Reset()

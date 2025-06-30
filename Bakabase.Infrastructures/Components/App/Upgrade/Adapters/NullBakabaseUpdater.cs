@@ -10,7 +10,7 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade.Adapters
     public class NullBakabaseUpdater: IBakabaseUpdater
     {
         public Task StartUpdater(int pid, string processName, string appDir, string newFilesDir, string executable,
-            AppVersionInfo.Installer installer)
+            AppVersionInfo.Installer? installer)
         {
             return Task.CompletedTask;
         }

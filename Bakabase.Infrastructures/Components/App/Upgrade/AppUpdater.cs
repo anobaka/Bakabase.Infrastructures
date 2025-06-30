@@ -27,7 +27,7 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade
         protected override SemVersion CurrentVersion => AppService.CoreVersion;
         private readonly IHostApplicationLifetime _lifetime;
 
-        protected override string AppRootPath => Path.GetDirectoryName(Assembly.GetEntryAssembly().Location);
+        protected override string AppRootPath => Path.GetDirectoryName(Assembly.GetEntryAssembly()!.Location)!;
 
         protected override string UnpackedFilesOssPathAfterVersion => "unpacked/win/";
         protected override string OssObjectPrefix => Options.Value.AppUpdaterOssObjectPrefix;
