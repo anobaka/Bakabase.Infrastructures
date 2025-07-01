@@ -157,8 +157,8 @@ namespace Bakabase.Infrastructures.Components.App
             var startPort = cliOptions.StartPort;
             for (var i = 0; i < ListeningPortCount; i++)
             {
-                startPort = NetworkUtils.GetFreeTcpPortFrom(startPort) + 1;
-                listenPorts.Add(startPort);
+                startPort = NetworkUtils.GetFreeTcpPortFrom(startPort);
+                listenPorts.Add(startPort++);
             }
 
             foreach (var port in listenPorts)
