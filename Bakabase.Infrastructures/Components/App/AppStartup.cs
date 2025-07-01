@@ -117,17 +117,7 @@ public abstract class AppStartup<TSwaggerCustomDocumentFilter>
 
     public virtual void Configure(IApplicationBuilder app, IHostApplicationLifetime lifetime)
     {
-        var listeningAddresses = app.ServerFeatures.Get<IServerAddressesFeature>().Addresses.ToArray();
-
-        lifetime.ApplicationStarted.Register(() =>
-        {
-            var appCtx = app.ApplicationServices.GetRequiredService<AppContext>();
-            appCtx.ListeningAddresses = listeningAddresses;
-            appCtx.ApiEndpoints = listeningAddresses.Where(x => !x.Contains("0.0.0.0")).ToArray();
-            appCtx.ApiEndpoint = appCtx.ApiEndpoints.FirstOrDefault();
-        });
-
-        app.UseBootstrapCors(ConfigureCors, listeningAddresses);
+        app.UseBootstrapCors(ConfigureCors, app.ApplicationServices.GetRequiredService<AppContext>().ApiEndpoints);
 
         app.UseSwagger(t => { t.RouteTemplate = "/internal-doc/swagger/{documentName}/swagger.json"; });
         app.UseSwaggerUI(t => { t.SwaggerEndpoint("/internal-doc/swagger/v1/swagger.json", "v1"); });

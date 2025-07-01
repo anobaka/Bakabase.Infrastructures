@@ -72,7 +72,7 @@ namespace Bakabase.Infrastructures.Components.App
                         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                             $"{name}.Debugging");
 #else
-                        var processDir = Path.GetDirectoryName(Process.GetCurrentProcess().MainModule?.FileName!)!;
+                        var processDir = Path.GetDirectoryName(Assembly.GetEntryAssembly()!.Location)!;
                         _defaultAppDataDirectory = Path.Combine(processDir, "AppData");
 #endif
                 }

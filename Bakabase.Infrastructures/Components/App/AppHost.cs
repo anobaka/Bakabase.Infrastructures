@@ -24,6 +24,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using Semver;
 
 namespace Bakabase.Infrastructures.Components.App
 {
@@ -71,8 +72,10 @@ namespace Bakabase.Infrastructures.Components.App
                 var prevVersion = await _appService.GetLastRunningVersion();
                 if (!AppConstants.InitialSemVersion.Equals(prevVersion))
                 {
-                    foreach (var m in migrators.Where(a => prevVersion.CompareSortOrderTo(a.ApplyOnVersionEqualsOrBefore) <= 0)
-                                 .OrderBy(a => a.ApplyOnVersionEqualsOrBefore))
+                    var sortedMigrators = migrators
+                        .Where(a => prevVersion.CompareSortOrderTo(a.ApplyOnVersionEqualsOrBefore) <= 0)
+                        .OrderBy(a => a.ApplyOnVersionEqualsOrBefore, SemVersion.SortOrderComparer);
+                    foreach (var m in sortedMigrators)
                     {
                         Logger.LogInformation($"Applying [{m.GetType().Name}] migrations on {timing}");
                         switch (timing)
@@ -151,15 +154,20 @@ namespace Bakabase.Infrastructures.Components.App
 #if !RELEASE
             listenPorts.Add(5000);
 #endif
-            var startPort = listenPorts.Any() ? listenPorts.Last() : cliOptions.StartPort;
-            for (var i = 1; i < ListeningPortCount; i++)
+            var startPort = cliOptions.StartPort;
+            for (var i = 0; i < ListeningPortCount; i++)
             {
-                startPort = NetworkUtils.GetFreeTcpPortAfter(startPort);
+                startPort = NetworkUtils.GetFreeTcpPortFrom(startPort) + 1;
                 listenPorts.Add(startPort);
             }
 
+            foreach (var port in listenPorts)
+            {
+                Console.WriteLine($"App will listen on port {port}");
+            }
+
             hostBuilder = hostBuilder.ConfigureWebHost(t =>
-                t.UseUrls(listenPorts.SelectMany(p => new[]{ $"http://localhost:{p}", $"http://0.0.0.0:{p}"}).ToArray()));
+                t.UseUrls(listenPorts.SelectMany(p => new[]{ $"http://0.0.0.0:{p}"}).ToArray()));
             return hostBuilder.Build();
         } 
 
@@ -277,13 +285,18 @@ namespace Bakabase.Infrastructures.Components.App
                     var lifetime = Host.Services.GetRequiredService<IHostApplicationLifetime>();
                     lifetime.ApplicationStarted.Register(() =>
                     {
-#if DEBUG
-                        var address = FeAddress ?? DefaultFeAddress;
-#else
                         var server = Host.Services.GetRequiredService<IServer>();
                         var features = server.Features;
-                        var address = features.Get<IServerAddressesFeature>()!
-                            .Addresses.FirstOrDefault(x => !x.Contains("0.0.0.0"));
+                        var listeningAddresses = features.Get<IServerAddressesFeature>()!.Addresses.ToArray();
+                        var addresses = listeningAddresses.Select(addr => addr.Replace("0.0.0.0", "localhost")).Distinct().ToArray();
+                        var address = addresses.First();
+                        var appCtx = Host.Services.GetRequiredService<AppContext>();
+                        appCtx.ListeningAddresses = listeningAddresses;
+                        appCtx.ApiEndpoints = addresses;
+                        appCtx.ApiEndpoint = address;
+
+#if DEBUG
+                        address = FeAddress ?? DefaultFeAddress;
 #endif
                         address = OverrideFeAddress(address);
 
@@ -337,7 +350,7 @@ namespace Bakabase.Infrastructures.Components.App
 
                     lifetime.ApplicationStopping.Register(_guiAdapter.Shutdown);
 
-                    await Host.StartAsync();
+                    await Host.RunAsync();
                 });
             }
             catch (Exception e)

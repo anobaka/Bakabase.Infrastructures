@@ -15,7 +15,7 @@ namespace Bakabase.Infrastructures.Components.Configurations.App
         public bool EnablePreReleaseChannel { get; set; }
         public bool EnableAnonymousDataTracking { get; set; } = true;
         public string WwwRootPath { get; set; } = null!;
-        public string DataPath { get; set; } = null!;
+        public string? DataPath { get; set; }
         public string PrevDataPath { get; set; } = null!;
         public CloseBehavior CloseBehavior { get; set; } = CloseBehavior.Prompt;
         public UiTheme UiTheme { get; set; }

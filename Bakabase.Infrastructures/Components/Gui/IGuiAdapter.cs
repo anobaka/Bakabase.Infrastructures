@@ -7,19 +7,20 @@ namespace Bakabase.Infrastructures.Components.Gui
 {
     public interface IGuiAdapter
     {
+        [Obsolete]
         string[]? OpenFilesSelector(string? initialDirectory = null);
-
+        [Obsolete]
         string? OpenFileSelector(string? initialDirectory = null);
-
+        [Obsolete]
         string? OpenFolderSelector(string? initialDirectory = null);
-
-        string GetDownloadsDirectory();
-        void ShowTray(Func<Task> onExiting);
+        [Obsolete]
+        string? GetDownloadsDirectory();
+        void ShowTray(Func<Task>? onExiting);
         void HideTray();
-        void SetTrayText([NotNull] string text);
-        void SetTrayIcon([NotNull] Icon icon);
-        void ShowFatalErrorWindow([NotNull] string message, string title = "Fatal Error");
-        void ShowInitializationWindow([NotNull] string processName);
+        void SetTrayText(string text);
+        void SetTrayIcon(Icon icon);
+        void ShowFatalErrorWindow(string message, string title = "Fatal Error");
+        void ShowInitializationWindow(string processName);
         void DestroyInitializationWindow();
         void ShowMainWebView([NotNull] string url, [NotNull] string title, Func<Task> onClosing);
         void SetMainWindowTitle(string title);
