@@ -48,7 +48,6 @@ namespace Bakabase.Infrastructures.Components.App
                                      ?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
                                      ?.InformationalVersion ??
                                  AppConstants.InitialVersion;
-                    verStr = verStr.Split('+').FirstOrDefault();
                     return SemVersion.Parse(verStr, SemVersionStyles.Any);
                 }
                 catch
