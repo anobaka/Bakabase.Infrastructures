@@ -73,6 +73,13 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade.Abstractions
             AppService = appService;
             UpdaterOptionsManager = updaterOptionsManager;
             AppOptionsManager = appOptionsManager;
+
+            Task.Run(Initialize);
+        }
+
+        protected virtual async Task Initialize()
+        {
+            var oc = OssClient;
         }
 
         private AppVersionInfo? CheckNewVersion(SemVersion? minimalVersion, bool includePreRelease)
@@ -97,11 +104,37 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade.Abstractions
             versions = versions?.Where(a =>
                 (includePreRelease || string.IsNullOrEmpty(a.Version?.Prerelease)) &&
                 (minimalVersion == null || a.Version.ComparePrecedenceTo(minimalVersion) > 0)).ToArray();
+            // debug:
+            // versions = versions.Where(v => v.Version.Equals(SemVersion.Parse("1.9.2-beta.18"))).ToArray();
 
             var version = versions?.Any() == true ? versions.FirstOrDefault().Version : null;
             if (version == null)
             {
                 return null;
+            }
+
+            // 列出当前version下所有文件，查找readme.md（不区分大小写，仅当前层级）
+            var versionPrefix = $"{OssObjectPrefix.TrimEnd('/')}/{version}/";
+            var filesUnderVersion = OssClient.ListObjects(new ListObjectsRequest(Options.Value.OssBucket)
+            {
+                Prefix = versionPrefix,
+                Delimiter = "/"
+            }).ObjectSummaries;
+            var readmeFile = filesUnderVersion.FirstOrDefault(f =>
+                string.Equals($"{versionPrefix}readme.md", f.Key, StringComparison.OrdinalIgnoreCase));
+            string? changelog = null;
+            if (readmeFile != null)
+            {
+                try
+                {
+                    var readmeObj = OssClient.GetObject(new GetObjectRequest(Options.Value.OssBucket, readmeFile.Key));
+                    using var reader = new StreamReader(readmeObj.Content);
+                    changelog = reader.ReadToEnd();
+                }
+                catch (Exception ex)
+                {
+                    // 文件读取异常，changelog 保持为 null
+                }
             }
 
             var installersPrefix = $"{OssObjectPrefix.TrimEnd('/')}/{version}/installer/";
@@ -118,7 +151,8 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade.Abstractions
             return new AppVersionInfo
             {
                 Installers = installers,
-                Version = version.ToString()
+                Version = version.ToString(),
+                Changelog = changelog
             };
         }
 

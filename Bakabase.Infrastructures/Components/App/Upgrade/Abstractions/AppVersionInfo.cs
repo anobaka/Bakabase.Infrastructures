@@ -6,8 +6,9 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade.Abstractions
 {
     public class AppVersionInfo
     {
-        public string Version { get; set; }
-        public Installer[] Installers { get; set; }
+        public string Version { get; set; } = null!;
+        public Installer[] Installers { get; set; } = [];
+        public string? Changelog { get; set; }
 
         public class Installer
         {
