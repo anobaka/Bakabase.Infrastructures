@@ -42,7 +42,7 @@ namespace Bakabase.Infrastructures.Components.App
 
         public IHost Host { get; private set; }
         public string FeAddress { get; set; }
-        private const string DefaultFeAddress = "http://localhost:4444";
+        private const string DefaultFeAddress = "http://localhost:3000";
 
         protected AppHost(IGuiAdapter guiAdapter, ISystemService systemService)
         {
