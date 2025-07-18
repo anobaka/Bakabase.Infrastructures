@@ -151,9 +151,6 @@ namespace Bakabase.Infrastructures.Components.App
             {
                 listenPorts.Add(initOptions.ListeningPort.Value);
             }
-#if !RELEASE
-            listenPorts.Add(5000);
-#endif
             var startPort = cliOptions.StartPort;
             for (var i = 0; i < ListeningPortCount; i++)
             {
@@ -343,7 +340,7 @@ namespace Bakabase.Infrastructures.Components.App
                                     AppLocalizer?.App_FatalError() ?? "Fatal error");
                             }
 
-                        }).ConfigureAwait(false).GetAwaiter().GetResult();
+                        });
 
                         #endregion
                     });
