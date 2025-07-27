@@ -86,7 +86,7 @@ public abstract class AppStartup<TSwaggerCustomDocumentFilter>
 
         // services.AddSingleton<BackgroundTaskManager>();
 
-        services.AddSpaStaticFiles(configuration => { configuration.RootPath = "ClientApp/build"; });
+        services.AddSpaStaticFiles(configuration => { configuration.RootPath = "web"; });
 
         services.TryAddSingleton<CleanerManager>();
 
@@ -151,7 +151,7 @@ public abstract class AppStartup<TSwaggerCustomDocumentFilter>
             {
                 spaApp.UseSpa(spa =>
                 {
-                    spa.Options.SourcePath = "ClientApp/build";
+                    spa.Options.SourcePath = "web";
                     spa.Options.DefaultPageStaticFileOptions = new StaticFileOptions()
                     {
                         OnPrepareResponse = ctx =>
