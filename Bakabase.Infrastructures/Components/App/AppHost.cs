@@ -151,11 +151,29 @@ namespace Bakabase.Infrastructures.Components.App
             {
                 listenPorts.Add(initOptions.ListeningPort.Value);
             }
-            var startPort = cliOptions.StartPort;
+            var startPort = cliOptions.Port;
+            var freePort1IsRequired = true; 
+            if (startPort == 0)
+            {
+                freePort1IsRequired = false;
+                startPort = 34567;
+            }
+
             for (var i = 0; i < ListeningPortCount; i++)
             {
-                startPort = NetworkUtils.GetFreeTcpPortFrom(startPort);
-                listenPorts.Add(startPort++);
+                var freePort = NetworkUtils.GetFreeTcpPortFrom(startPort);
+                if (i == 0 && freePort1IsRequired && freePort != startPort)
+                {
+                    // let web kernel throws error
+                    listenPorts.Add(startPort);
+                    listenPorts.Add(freePort);
+                }
+                else
+                {
+                    listenPorts.Add(freePort);
+                }
+
+                startPort = freePort + 1;
             }
 
             foreach (var port in listenPorts)
