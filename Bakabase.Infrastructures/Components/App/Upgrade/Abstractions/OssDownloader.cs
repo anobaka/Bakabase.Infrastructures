@@ -41,7 +41,8 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade.Abstractions
             Func<string, Task> onSkipped,
             Func<string, Task> onDownloaded,
             Func<string, Task> onFailed,
-            CancellationToken ct)
+            CancellationToken ct,
+            int retryCount = 0)
         {
             var failedFiles = new ConcurrentDictionary<string, string>();
 
@@ -179,9 +180,13 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade.Abstractions
 
             if (failedFiles.Count > 0)
             {
-                _logger.LogInformation($"{failedFiles.Count} files remaining, continue downloading");
+                if (retryCount >= 3)
+                {
+                    throw new Exception($"Failed to download {failedFiles.Count} files after {retryCount} retries: {string.Join(", ", failedFiles.Keys)}");
+                }
+                _logger.LogInformation($"{failedFiles.Count} files remaining, retry {retryCount + 1}/3");
                 await Download(failedFiles.ToDictionary(p => p.Key, p => p.Value), skip, onSkipped, onDownloaded,
-                    onFailed, ct);
+                    onFailed, ct, retryCount + 1);
             }
         }
 
