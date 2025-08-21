@@ -175,11 +175,11 @@ namespace Bakabase.Infrastructures.Components.App
 
             Log.Logger.Information("Environment has been set up.");
         }
-        
+
 #if RUNTIME_MODE_WINFORMS
-        public RuntimeMode RuntimeMode => RuntimeMode.WinForms;
+        public static RuntimeMode RuntimeMode => RuntimeMode.WinForms;
 #elif RUNTIME_MODE_DOCKER
-        public RuntimeMode RuntimeMode => RuntimeMode.Docker;
+        public static RuntimeMode RuntimeMode => RuntimeMode.Docker;
 #else
         public static RuntimeMode RuntimeMode => RuntimeMode.Dev;
 #endif
