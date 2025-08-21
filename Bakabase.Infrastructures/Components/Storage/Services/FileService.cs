@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Bakabase.Infrastructures.Components.App;
 using Bakabase.Infrastructures.Components.Configurations.App;
@@ -363,8 +364,15 @@ namespace Bakabase.Infrastructures.Components.Storage.Services
             {
                 arguments = $"/select,{arguments}";
             }
-
-            Process.Start("explorer", arguments);
+            
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                Process.Start(new ProcessStartInfo("explorer", arguments) { UseShellExecute = true });
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+                Process.Start("open", path);
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                Process.Start("xdg-open", path);
+            else
+                throw new PlatformNotSupportedException();
         }
 
         public static List<DriveInfo> GetAllDrives()

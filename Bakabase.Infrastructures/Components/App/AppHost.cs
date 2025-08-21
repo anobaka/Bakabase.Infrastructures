@@ -15,11 +15,13 @@ using Bootstrap.Components.Configuration.Abstractions;
 using Bootstrap.Components.Configuration.Helpers;
 using Bootstrap.Components.Logging.LogService;
 using Bootstrap.Extensions;
+using Bootstrap.Models.Constants;
 using CommandLine;
 using CommandLine.Text;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -34,11 +36,12 @@ namespace Bakabase.Infrastructures.Components.App
         private readonly IGuiAdapter _guiAdapter;
         private readonly ISystemService _systemService;
         protected IServiceProvider HostServices { get; private set; }
+        protected IServiceProvider InitHostServices { get; private set; }
         protected ILogger Logger { get; private set; }
         protected AppLocalizer AppLocalizer { get; private set; }
         protected abstract string DisplayName { get; }
 
-        protected virtual int ListeningPortCount { get; } = 1;
+        protected virtual int DefaultAutoListeningPortCount { get; } = 1;
 
         public IHost Host { get; private set; }
         public string FeAddress { get; set; }
@@ -104,8 +107,7 @@ namespace Bakabase.Infrastructures.Components.App
             return Task.CompletedTask;
         }
 
-        private IHost CreateHost(string[] args, ConfigurationRegistrations configurationRegistrations,
-            AppOptions initOptions, AppCliOptions cliOptions)
+        private IHost CreateHost(string[] args, ConfigurationRegistrations configurationRegistrations, AppOptions initOptions, EnvOptions envOptions)
         {
             // {DataPath ?? AppData}/configs/*
             var optionsDescribers =
@@ -146,43 +148,39 @@ namespace Bakabase.Infrastructures.Components.App
                     }
                 });
 
-            var listenPorts = new List<int>();
-            if (initOptions.ListeningPort.HasValue)
+            List<int> listeningPorts = [];
+            switch (AppService.RuntimeMode)
             {
-                listenPorts.Add(initOptions.ListeningPort.Value);
-            }
-            var startPort = cliOptions.Port;
-            var freePort1IsRequired = true; 
-            if (startPort == 0)
-            {
-                freePort1IsRequired = false;
-                startPort = 34567;
-            }
+                case RuntimeMode.Dev or RuntimeMode.WinForms:
+                    if (AppService.RuntimeMode == RuntimeMode.Dev)
+                    {
+                        listeningPorts.Add(8080);
+                    }
+                    listeningPorts.AddRange(initOptions.ListeningPorts?.ToList() ?? []);
+                    var autoListeningPortCount = initOptions.AutoListeningPortCount ?? DefaultAutoListeningPortCount;
+                    if (autoListeningPortCount > 0)
+                    {
+                        var randomPortStart = 34567;
 
-            for (var i = 0; i < ListeningPortCount; i++)
-            {
-                var freePort = NetworkUtils.GetFreeTcpPortFrom(startPort);
-                if (i == 0 && freePort1IsRequired && freePort != startPort)
-                {
-                    // let web kernel throws error
-                    listenPorts.Add(startPort);
-                    listenPorts.Add(freePort);
-                }
-                else
-                {
-                    listenPorts.Add(freePort);
-                }
-
-                startPort = freePort + 1;
+                        for (var i = 0; i < autoListeningPortCount; i++)
+                        {
+                            var freePort = NetworkUtils.GetFreeTcpPortFrom(randomPortStart);
+                            listeningPorts.Add(freePort);
+                            randomPortStart = freePort + 1;
+                        }
+                    }
+                    break;
+                case RuntimeMode.Docker:
+                    listeningPorts = envOptions.ListeningPorts.ToList();
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException();
             }
-
-            foreach (var port in listenPorts)
-            {
-                Console.WriteLine($"App will listen on port {port}");
-            }
+            
+            Logger.LogInformation($"App will listen on port {string.Join(',', listeningPorts)}");
 
             hostBuilder = hostBuilder.ConfigureWebHost(t =>
-                t.UseUrls(listenPorts.SelectMany(p => new[]{ $"http://0.0.0.0:{p}"}).ToArray()));
+                t.UseUrls(listeningPorts.SelectMany(p => new[]{ $"http://0.0.0.0:{p}"}).ToArray()));
             return hostBuilder.Build();
         } 
 
@@ -223,37 +221,19 @@ namespace Bakabase.Infrastructures.Components.App
         {
             try
             {
-                var parseResult = Parser.Default.ParseArguments<AppCliOptions>(args);
-
-                AppCliOptions? cliOptions = null;
-                parseResult.WithParsed(x =>
-                {
-                    cliOptions = x;
-                }).WithNotParsed(errors =>
-                {
-                    // var helpText = HelpText.AutoBuild(parseResult, h =>
-                    // {
-                    //     h.AdditionalNewLineAfterOption = false;
-                    //     h.Heading = DisplayName; //change header
-                    //     // h.Copyright = "Copyright (c) 2019 Global.com"; //change copyright text
-                    //     h.AddPostOptionsLine("Default options is used due to failed to parse arguments.");
-                    //     return HelpText.DefaultParsingErrorsHandler(parseResult, h);
-                    // }, e => e);
-                    cliOptions = new AppCliOptions();
-                });
-
-                Console.WriteLine($"Start app with cli options: {JsonConvert.SerializeObject(cliOptions)}");
-
                 #region Initialize host services
 
-                var fallbackSc = new ServiceCollection();
-                fallbackSc.AddSimpleLogging();
-                fallbackSc.AddLocalization(a => a.ResourcesPath = "Resources");
-                fallbackSc.AddSingleton<AppLocalizer>();
-                HostServices = fallbackSc.BuildServiceProvider();
-                Logger = HostServices.GetRequiredService<ILoggerFactory>().CreateLogger(GetType());
-                AppLocalizer = HostServices.GetRequiredService<AppLocalizer>();
-
+                var initHostBuilder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder(args);
+                initHostBuilder.Configuration.AddEnvironmentVariables();
+                initHostBuilder.Services.AddSimpleLogging();
+                initHostBuilder.Services.AddLocalization(a => a.ResourcesPath = "Resources");
+                initHostBuilder.Services.AddSingleton<AppLocalizer>();
+                initHostBuilder.Services.Configure<EnvOptions>(initHostBuilder.Configuration);
+                var envOptions = initHostBuilder.Configuration.Get<EnvOptions>()!;
+                var initHost = initHostBuilder.Build();
+                Logger = initHost.Services.GetRequiredService<ILoggerFactory>().CreateLogger(GetType());
+                AppLocalizer = initHost.Services.GetRequiredService<AppLocalizer>();
+                InitHostServices = initHost.Services;
                 #endregion
 
                 var initialOptions = await GetInitializationOptions();
@@ -280,7 +260,8 @@ namespace Bakabase.Infrastructures.Components.App
                     cr.AddApplicationPart(assembly);
                 }
 
-                Host = CreateHost(args, cr, initialOptions, cliOptions!);
+                Host = CreateHost(args, cr, initialOptions, envOptions);
+                HostServices = Host.Services;
 
                 _appService = Host.Services.GetRequiredService<AppService>();
                 _appOptionsManager = Host.Services.GetRequiredService<IBOptionsManager<AppOptions>>();

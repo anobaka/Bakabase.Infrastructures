@@ -7,14 +7,6 @@ namespace Bakabase.Infrastructures.Components.Gui
 {
     public interface IGuiAdapter
     {
-        [Obsolete]
-        string[]? OpenFilesSelector(string? initialDirectory = null);
-        [Obsolete]
-        string? OpenFileSelector(string? initialDirectory = null);
-        [Obsolete]
-        string? OpenFolderSelector(string? initialDirectory = null);
-        [Obsolete]
-        string? GetDownloadsDirectory();
         void ShowTray(Func<Task>? onExiting);
         void HideTray();
         void SetTrayText(string text);

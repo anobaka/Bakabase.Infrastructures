@@ -1,4 +1,5 @@
-﻿using Bakabase.Infrastructures.Components.App.Models.Constants;
+﻿using System.Collections.Generic;
+using Bakabase.Infrastructures.Components.App.Models.Constants;
 using Bakabase.Infrastructures.Components.Gui;
 using Bootstrap.Components.Configuration.Abstractions;
 
@@ -19,7 +20,8 @@ namespace Bakabase.Infrastructures.Components.Configurations.App
         public string PrevDataPath { get; set; } = null!;
         public CloseBehavior CloseBehavior { get; set; } = CloseBehavior.Prompt;
         public UiTheme UiTheme { get; set; }
-        public int? ListeningPort { get; set; }
+        public int? AutoListeningPortCount { get; set; }
+        public List<int>? ListeningPorts { get; set; } 
 
         public bool IsNotInitialized() => Version == AppConstants.InitialVersion;
     }

@@ -13,10 +13,6 @@ namespace Bakabase.Infrastructures.Components.Gui
     {
         public abstract void InvokeInGuiContext(Action action);
         public abstract T InvokeInGuiContext<T>(Func<T> func);
-        public abstract string[]? OpenFilesSelector(string? initialDirectory = null);
-        public abstract string? OpenFileSelector(string? initialDirectory = null);
-        public abstract string? OpenFolderSelector(string? initialDirectory = null);
-        public abstract string GetDownloadsDirectory();
         public abstract void ShowTray(Func<Task> onExiting);
         public abstract void HideTray();
         public abstract void SetTrayText(string text);

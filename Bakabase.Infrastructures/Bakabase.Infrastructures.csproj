@@ -4,6 +4,7 @@
 		<TargetFrameworks>net9.0</TargetFrameworks>
 		<LangVersion>latest</LangVersion>
 		<Nullable>enable</Nullable>
+		<DefineConstants>$(DefineConstants);RUNTIME_MODE_$(RuntimeMode)</DefineConstants>
 	</PropertyGroup>
 
 	<ItemGroup>

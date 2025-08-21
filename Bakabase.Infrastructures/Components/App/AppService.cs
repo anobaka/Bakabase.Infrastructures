@@ -19,6 +19,7 @@ using Bakabase.Infrastructures.Components.Storage.Services;
 using Bootstrap.Components.Configuration.Abstractions;
 using Bootstrap.Components.Storage;
 using Bootstrap.Extensions;
+using Bootstrap.Models.Constants;
 using Humanizer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -174,6 +175,14 @@ namespace Bakabase.Infrastructures.Components.App
 
             Log.Logger.Information("Environment has been set up.");
         }
+        
+#if RUNTIME_MODE_WINFORMS
+        public RuntimeMode RuntimeMode => RuntimeMode.WinForms;
+#elif RUNTIME_MODE_DOCKER
+        public RuntimeMode RuntimeMode => RuntimeMode.Docker;
+#else
+        public static RuntimeMode RuntimeMode => RuntimeMode.Dev;
+#endif
 
         #endregion
 
