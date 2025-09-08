@@ -236,6 +236,9 @@ namespace Bakabase.Infrastructures.Components.App
                 InitHostServices = initHost.Services;
                 #endregion
 
+                _guiAdapter.ShowInitializationWindow(AppLocalizer.App_Initializing());
+                _guiAdapter.ShowTray(async () => await TryToExit(true));
+
                 var initialOptions = await GetInitializationOptions();
 
                 AppService.SetCulture(initialOptions.Language);
@@ -267,9 +270,6 @@ namespace Bakabase.Infrastructures.Components.App
                 _appOptionsManager = Host.Services.GetRequiredService<IBOptionsManager<AppOptions>>();
 
                 var appDataMover = Host.Services.GetRequiredService<AppDataMover>();
-
-                _guiAdapter.ShowInitializationWindow(AppLocalizer.App_Initializing());
-                _guiAdapter.ShowTray(async () => await TryToExit(true));
 
                 // while (true)
                 // {
