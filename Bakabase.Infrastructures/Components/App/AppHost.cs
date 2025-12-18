@@ -439,6 +439,6 @@ namespace Bakabase.Infrastructures.Components.App
             }
         }
 
-        protected abstract Task<string> CheckIfAppCanExitSafely();
+        protected abstract Task<string?> CheckIfAppCanExitSafely();
     }
 }
