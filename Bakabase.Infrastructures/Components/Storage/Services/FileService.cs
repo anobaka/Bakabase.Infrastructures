@@ -359,20 +359,33 @@ namespace Bakabase.Infrastructures.Components.Storage.Services
         /// <param name="openInDirectory">True for opening directory of <see cref="path"/> then select it and false for opening <see cref="path"/> itself.</param>
         public static async Task Open(string path, bool openInDirectory)
         {
-            var arguments = $"\"{path}\"".Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
-            if (openInDirectory)
-            {
-                arguments = $"/select,{arguments}";
-            }
-            
+            var quotedPath = $"\"{path}\"";
+
+            string command;
+            string arguments;
+
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-                Process.Start(new ProcessStartInfo("explorer", arguments) { UseShellExecute = true });
+            {
+                command = "explorer";
+                arguments = openInDirectory ? $"/select,{quotedPath}" : quotedPath;
+                arguments = arguments.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
+            }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-                Process.Start("open", path);
+            {
+                command = "open";
+                arguments = openInDirectory ? $"-R {quotedPath}" : quotedPath;
+            }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-                Process.Start("xdg-open", path);
+            {
+                command = "xdg-open";
+                arguments = quotedPath;
+            }
             else
+            {
                 throw new PlatformNotSupportedException();
+            }
+
+            Process.Start(new ProcessStartInfo(command, arguments) { UseShellExecute = true });
         }
 
         public static List<DriveInfo> GetAllDrives()
