@@ -11,6 +11,11 @@ namespace Bakabase.Infrastructures.Components.App.Models.RequestModels
         public CloseBehavior? CloseBehavior { get; set; }
         public UiTheme? UiTheme { get; set; }
         public int? AutoListeningPortCount { get; set; }
-        public List<int>? ListeningPorts { get; set; } 
+        public List<int>? ListeningPorts { get; set; }
+
+        /// <summary>
+        /// Maximum degree of parallelism for CPU-intensive operations.
+        /// </summary>
+        public int? MaxParallelism { get; set; }
     }
 }
