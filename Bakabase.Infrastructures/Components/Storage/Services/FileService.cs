@@ -363,12 +363,17 @@ namespace Bakabase.Infrastructures.Components.Storage.Services
 
             string command;
             string arguments;
+            var useShellExecute = true;
 
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
                 command = "explorer";
-                arguments = openInDirectory ? $"/select,{quotedPath}" : quotedPath;
-                arguments = arguments.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
+                // Replace forward slashes with backslashes in path only (not in /select option)
+                var windowsPath = path.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
+                var windowsQuotedPath = $"\"{windowsPath}\"";
+                arguments = openInDirectory ? $"/select,{windowsQuotedPath}" : windowsQuotedPath;
+                // Windows explorer needs UseShellExecute=false for /select to work correctly with special characters
+                useShellExecute = false;
             }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
             {
@@ -385,7 +390,12 @@ namespace Bakabase.Infrastructures.Components.Storage.Services
                 throw new PlatformNotSupportedException();
             }
 
-            Process.Start(new ProcessStartInfo(command, arguments) { UseShellExecute = true });
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = command,
+                Arguments = arguments,
+                UseShellExecute = useShellExecute
+            });
         }
 
         public static List<DriveInfo> GetAllDrives()
