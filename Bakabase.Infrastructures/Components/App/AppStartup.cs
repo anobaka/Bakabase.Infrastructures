@@ -103,8 +103,6 @@ public abstract class AppStartup<TSwaggerCustomDocumentFilter>
         services.AddSingleton<AppDataMover>();
 
         services.AddResponseCaching();
-
-        services.AddSingleton<AppContext>();
     }
 
     protected virtual void ConfigureEndpointsAtFirst(IEndpointRouteBuilder routeBuilder)

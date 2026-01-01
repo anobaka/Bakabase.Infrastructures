@@ -179,8 +179,21 @@ namespace Bakabase.Infrastructures.Components.App
             
             Logger.LogInformation($"App will listen on port {string.Join(',', listeningPorts)}");
 
-            hostBuilder = hostBuilder.ConfigureWebHost(t =>
-                t.UseUrls(listeningPorts.SelectMany(p => new[]{ $"http://0.0.0.0:{p}"}).ToArray()));
+            // 预计算 addresses，确保 CORS 配置时能获取到正确的 origins
+            var listeningAddresses = listeningPorts.Select(p => $"http://0.0.0.0:{p}").ToArray();
+            var apiEndpoints = listeningPorts.Select(p => $"http://localhost:{p}").ToArray();
+
+            hostBuilder = hostBuilder
+                .ConfigureServices((context, collection) =>
+                {
+                    collection.AddSingleton(new AppContext
+                    {
+                        ListeningAddresses = listeningAddresses,
+                        ApiEndpoints = apiEndpoints,
+                        ApiEndpoint = apiEndpoints.FirstOrDefault()
+                    });
+                })
+                .ConfigureWebHost(t => t.UseUrls(listeningAddresses));
             return hostBuilder.Build();
         } 
 
