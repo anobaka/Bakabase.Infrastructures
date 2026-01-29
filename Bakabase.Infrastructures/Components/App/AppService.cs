@@ -95,11 +95,31 @@ namespace Bakabase.Infrastructures.Components.App
 
         public static void SetCulture(string language)
         {
-            var cultureInfo = "cn".Equals(language, StringComparison.OrdinalIgnoreCase)
-                ? "zh-cn"
-                : "en";
+            var cultureInfo = NormalizeLanguageCode(language);
             CultureInfo.DefaultThreadCurrentCulture = CultureInfo.DefaultThreadCurrentUICulture =
                 CultureInfo.CurrentCulture = CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(cultureInfo);
+        }
+
+        /// <summary>
+        /// Normalizes language codes to BCP 47 standard format.
+        /// Supports both legacy format (cn/en) and standard format (zh-CN/en-US).
+        /// </summary>
+        public static string NormalizeLanguageCode(string? language)
+        {
+            return language?.ToLowerInvariant() switch
+            {
+                "cn" or "zh-cn" or "zh-hans" or "zh-hans-cn" => "zh-CN",
+                "en" or "en-us" => "en-US",
+                _ => "zh-CN"
+            };
+        }
+
+        /// <summary>
+        /// Converts standard language code to legacy format for backward compatibility.
+        /// </summary>
+        public static string ToLegacyLanguageCode(string? language)
+        {
+            return NormalizeLanguageCode(language) == "zh-CN" ? "cn" : "en";
         }
 
         private static OsPlatform? _osPlatform;

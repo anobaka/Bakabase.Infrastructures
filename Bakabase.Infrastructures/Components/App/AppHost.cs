@@ -1,7 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
+using System.IO.Pipes;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using Bakabase.Infrastructures.Components.App.Migrations;
 using Bakabase.Infrastructures.Components.App.Models.Constants;
@@ -46,6 +49,19 @@ namespace Bakabase.Infrastructures.Components.App
         public IHost Host { get; private set; }
         public string FeAddress { get; set; }
         private const string DefaultFeAddress = "http://localhost:3000";
+
+        // Single instance support
+        private Mutex? _singleInstanceMutex;
+        private CancellationTokenSource? _pipeServerCts;
+
+        /// <summary>
+        /// Unique identifier for single instance detection. Override this to enable single instance mode.
+        /// Return null to disable single instance detection.
+        /// </summary>
+        protected virtual string? SingleInstanceId => null;
+
+        private string MutexName => $"{SingleInstanceId}_SingleInstance_Mutex";
+        private string PipeName => $"{SingleInstanceId}_SingleInstance_Pipe";
 
         protected AppHost(IGuiAdapter guiAdapter, ISystemService systemService)
         {
@@ -220,20 +236,50 @@ namespace Bakabase.Infrastructures.Components.App
 
                 #region System-Scope Settings
 
-                options.Language = _systemService.Language;
+                options.Language = AppService.NormalizeLanguageCode(_systemService.Language);
 
                 Logger.LogInformation($"Settings for bakabase scope are not found, use system-scope settings, language: {options.Language}, ui theme: {options.UiTheme}");
 
                 #endregion
             }
+            else
+            {
+                // Migrate legacy language codes (cn/en) to standard format (zh-CN/en-US)
+                var normalizedLanguage = AppService.NormalizeLanguageCode(options.Language);
+                if (options.Language != normalizedLanguage)
+                {
+                    Logger.LogInformation($"Migrating language code from '{options.Language}' to '{normalizedLanguage}'");
+                    options.Language = normalizedLanguage;
+                    await AppOptionsManager.Default.SaveAsync(o => o.Language = normalizedLanguage);
+                }
+            }
 
             return options;
         }
 
-        public async Task Start(string[] args)
+        public async Task<bool> Start(string[] args)
         {
             try
             {
+                // Single instance check (only for WinForms mode)
+                if (SingleInstanceId != null && AppService.RuntimeMode == RuntimeMode.WinForms)
+                {
+                    _singleInstanceMutex = new Mutex(true, MutexName, out var createdNew);
+
+                    if (!createdNew)
+                    {
+                        // Another instance is running, notify it to show the window
+                        await NotifyExistingInstanceAsync();
+                        _singleInstanceMutex.Dispose();
+                        _singleInstanceMutex = null;
+                        _guiAdapter.Shutdown();
+                        return false;
+                    }
+
+                    // Start the named pipe server to listen for activation requests
+                    StartPipeServer();
+                }
+
                 #region Initialize host services
 
                 var initHostBuilder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder(args);
@@ -361,13 +407,81 @@ namespace Bakabase.Infrastructures.Components.App
 
                     await Host.RunAsync();
                 });
+
+                return true;
             }
             catch (Exception e)
             {
                 Logger?.LogError(e.BuildFullInformationText());
                 _guiAdapter.ShowFatalErrorWindow(e.BuildFullInformationText(),
                     AppLocalizer?.App_FatalError() ?? "Fatal error");
+                return false;
             }
+        }
+
+        private void StartPipeServer()
+        {
+            _pipeServerCts = new CancellationTokenSource();
+            var ct = _pipeServerCts.Token;
+
+            Task.Run(async () =>
+            {
+                while (!ct.IsCancellationRequested)
+                {
+                    try
+                    {
+                        await using var server = new NamedPipeServerStream(
+                            PipeName,
+                            PipeDirection.In,
+                            1,
+                            PipeTransmissionMode.Byte,
+                            PipeOptions.Asynchronous);
+
+                        await server.WaitForConnectionAsync(ct);
+
+                        using var reader = new StreamReader(server);
+                        var message = await reader.ReadLineAsync(ct);
+
+                        if (message == "SHOW")
+                        {
+                            _guiAdapter.Show();
+                        }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger?.LogWarning(ex, "Error in single instance pipe server");
+                    }
+                }
+            }, ct);
+        }
+
+        private async Task NotifyExistingInstanceAsync()
+        {
+            try
+            {
+                await using var client = new NamedPipeClientStream(".", PipeName, PipeDirection.Out);
+                await client.ConnectAsync(3000); // 3 second timeout
+
+                await using var writer = new StreamWriter(client) { AutoFlush = true };
+                await writer.WriteLineAsync("SHOW");
+            }
+            catch (Exception ex)
+            {
+                // If we can't connect, the other instance might be stuck, just exit
+                Logger?.LogWarning(ex, "Failed to notify existing instance");
+            }
+        }
+
+        public void Dispose()
+        {
+            _pipeServerCts?.Cancel();
+            _pipeServerCts?.Dispose();
+            _singleInstanceMutex?.ReleaseMutex();
+            _singleInstanceMutex?.Dispose();
         }
 
         /// <summary>
