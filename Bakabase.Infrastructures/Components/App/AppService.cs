@@ -280,7 +280,8 @@ namespace Bakabase.Infrastructures.Components.App
             BackupPath = DataBackupDirectory,
             NotAcceptTerms = NotAcceptTerms,
             NeedRestart = NeedRestart,
-            TempFilesPath = TempFilesPath
+            TempFilesPath = TempFilesPath,
+            DataPath = DataFilesPath
         };
     }
 }
