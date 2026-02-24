@@ -57,12 +57,19 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade
         public async Task StartUpdater()
         {
             var newVersion = await CheckNewVersion();
-            newVersion.Installers[0].OsPlatform = OSPlatform.Windows;
-            newVersion.Installers[0].OsArchitecture = Architecture.X64;
+            if (newVersion == null)
+            {
+                throw new InvalidOperationException("No new version available.");
+            }
 
             var installer = newVersion.Installers?.FirstOrDefault(a =>
                 a.OsPlatform != null && RuntimeInformation.IsOSPlatform(a.OsPlatform.Value) &&
                 RuntimeInformation.OSArchitecture == a.OsArchitecture);
+            if (installer == null)
+            {
+                throw new InvalidOperationException(
+                    $"No compatible installer found for {RuntimeInformation.OSDescription} {RuntimeInformation.OSArchitecture}.");
+            }
 
             await _updater.StartUpdater(MainProcess.Id, MainProcess.ProcessName,
                 Path.GetDirectoryName(MainProcess.MainModule!.FileName), DownloadDir, MainProcess.MainModule.FileName,
