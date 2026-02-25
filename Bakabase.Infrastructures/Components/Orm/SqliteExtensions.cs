@@ -33,9 +33,12 @@ namespace Bakabase.Infrastructures.Components.Orm
             var db = sp.GetService<TDbContext>();
 
             await db.Database.OpenConnectionAsync();
+            await db.Database.ExecuteSqlRawAsync($"PRAGMA encoding = 'UTF-16';PRAGMA page_size = {65536};");
             // This two pragmas below are persistent, and cache_size is working with current connection.
             await db.Database.ExecuteSqlRawAsync($"PRAGMA journal_mode = WAL;");
-            await db.Database.ExecuteSqlRawAsync($"PRAGMA encoding = 'UTF-16';PRAGMA page_size = {65536};");
+            await db.Database.ExecuteSqlRawAsync("PRAGMA auto_vacuum = INCREMENTAL");
+            await db.Database.ExecuteSqlRawAsync("PRAGMA wal_checkpoint(TRUNCATE)");
+            await db.Database.ExecuteSqlRawAsync("VACUUM");
             await db.Database.MigrateAsync();
         }
 
