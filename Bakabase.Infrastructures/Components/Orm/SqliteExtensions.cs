@@ -39,6 +39,7 @@ namespace Bakabase.Infrastructures.Components.Orm
             await db.Database.ExecuteSqlRawAsync("PRAGMA auto_vacuum = INCREMENTAL");
             await db.Database.ExecuteSqlRawAsync("PRAGMA wal_checkpoint(TRUNCATE)");
             await db.Database.ExecuteSqlRawAsync("VACUUM");
+            await db.Database.ExecuteSqlRawAsync("PRAGMA wal_checkpoint(TRUNCATE)"); 
             await db.Database.MigrateAsync();
         }
 
