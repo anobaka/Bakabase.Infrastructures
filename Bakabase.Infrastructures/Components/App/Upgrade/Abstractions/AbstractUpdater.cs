@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Management;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Aliyun.OSS;
@@ -141,19 +142,62 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade.Abstractions
             var installers = OssClient
                 .ListObjects(new ListObjectsRequest(Options.Value.OssBucket)
                     {Prefix = installersPrefix}).ObjectSummaries.Where(a => a.Size > 0).Select(a =>
-                    new AppVersionInfo.Installer
+                {
+                    var relativePath = a.Key.Substring(installersPrefix.Length);
+                    var (platform, arch) = ParseInstallerPlatformFromPath(relativePath);
+                    return new AppVersionInfo.Installer
                     {
+                        OsPlatform = platform,
+                        OsArchitecture = arch,
                         Name = Path.GetFileName(a.Key),
                         Size = a.Size,
                         Url =
                             $"{Options.Value.OssDomain.TrimEnd('/')}/{string.Join('/', a.Key.Split('/').Select(Uri.EscapeUriString))}"
-                    }).ToArray();
+                    };
+                }).ToArray();
             return new AppVersionInfo
             {
                 Installers = installers,
                 Version = version.ToString(),
                 Changelog = changelog
             };
+        }
+
+        /// <summary>
+        /// Parses OS platform and architecture from an installer's relative path under the installer/ prefix.
+        /// Expected path format: {os}-{arch}/{filename} (e.g., "win-x64/setup.exe").
+        /// For backward compatibility, files directly under installer/ (no subdirectory) default to Windows X64.
+        /// </summary>
+        private static (OSPlatform? Platform, Architecture Arch) ParseInstallerPlatformFromPath(string relativePath)
+        {
+            var slashIndex = relativePath.IndexOf('/');
+            if (slashIndex > 0)
+            {
+                var platformDir = relativePath.Substring(0, slashIndex);
+                var dashIndex = platformDir.IndexOf('-');
+                if (dashIndex > 0)
+                {
+                    var osStr = platformDir.Substring(0, dashIndex).ToLowerInvariant();
+                    var archStr = platformDir.Substring(dashIndex + 1);
+
+                    OSPlatform? osPlatform = osStr switch
+                    {
+                        "win" => OSPlatform.Windows,
+                        "osx" => OSPlatform.OSX,
+                        "linux" => OSPlatform.Linux,
+                        "freebsd" => OSPlatform.FreeBSD,
+                        _ => null
+                    };
+
+                    if (osPlatform != null && Enum.TryParse<Architecture>(archStr, true, out var arch))
+                    {
+                        return (osPlatform, arch);
+                    }
+                }
+            }
+
+            // Backward compatibility: installers without os-arch subdirectory are assumed to be win-x64
+            return (OSPlatform.Windows, Architecture.X64);
         }
 
         private OssObjectSummary[] ListOssObjects(string prefix)
