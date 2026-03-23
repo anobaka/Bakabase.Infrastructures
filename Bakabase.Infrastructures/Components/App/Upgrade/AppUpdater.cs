@@ -1,79 +1,246 @@
-﻿using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
+using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Management;
 using System.Reflection;
 using System.Runtime.InteropServices;
-using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Bakabase.Infrastructures.Components.App.Upgrade.Abstractions;
-using Bakabase.Infrastructures.Components.App.Upgrade.Adapters;
-using Bakabase.Infrastructures.Components.Configurations;
 using Bakabase.Infrastructures.Components.Configurations.App;
 using Bootstrap.Components.Configuration.Abstractions;
-using Bootstrap.Components.Tasks.Progressor.Abstractions.Models;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Semver;
+using Velopack;
+using Velopack.Sources;
 
 namespace Bakabase.Infrastructures.Components.App.Upgrade
 {
-    public class AppUpdater : AbstractUpdater
+    public class AppUpdater
     {
-        protected override SemVersion CurrentVersion => AppService.CoreVersion;
-        private readonly IHostApplicationLifetime _lifetime;
+        private readonly ILogger<AppUpdater> _logger;
+        private readonly AppService _appService;
+        private readonly IBOptionsManager<UpdaterOptions> _updaterOptionsManager;
+        private readonly IBOptionsManager<AppOptions> _appOptionsManager;
+        private CancellationTokenSource? _cts;
 
-        protected override string AppRootPath => Path.GetDirectoryName(Assembly.GetEntryAssembly()!.Location)!;
+        public UpdaterState State { get; private set; } = new() { Status = UpdaterStatus.Idle };
+        public event Func<UpdaterState, Task>? OnStateChange;
 
-        protected override string UnpackedFilesOssPathAfterVersion => "unpacked/win/";
-        protected override string OssObjectPrefix => Options.Value.AppUpdaterOssObjectPrefix;
-        private static Process _mainProcess;
+        private UpdateInfo? _lastUpdateInfo;
 
-        public static Process MainProcess => _mainProcess ??= Process.GetCurrentProcess();
-        private readonly IBakabaseUpdater _updater;
-
-        public AppUpdater(OssDownloader downloader, ILogger<AbstractUpdater> logger, AppService appService,
-            IBOptionsManager<UpdaterOptions> updaterOptionsManager, IBOptionsManager<AppOptions> appOptionsManager,
-            IHostApplicationLifetime lifetime, IBakabaseUpdater updater) : base(downloader, logger, appService,
-            updaterOptionsManager,
-            appOptionsManager)
+        public AppUpdater(
+            ILogger<AppUpdater> logger,
+            AppService appService,
+            IBOptionsManager<UpdaterOptions> updaterOptionsManager,
+            IBOptionsManager<AppOptions> appOptionsManager)
         {
-            _lifetime = lifetime;
-            _updater = updater;
+            _logger = logger;
+            _appService = appService;
+            _updaterOptionsManager = updaterOptionsManager;
+            _appOptionsManager = appOptionsManager;
         }
 
-        protected override async Task<bool> GetEnablePreReleaseChannel() =>
-            (AppOptionsManager).Value.EnablePreReleaseChannel;
-
-        protected override async Task UpdateWithDownloadedFiles(AppVersionInfo version)
+        private UpdateManager CreateUpdateManager()
         {
-            await UpdateState(s => s.Status = UpdaterStatus.PendingRestart);
+            var options = _updaterOptionsManager.Value;
+            var updateUrl = options.VelopackUpdateUrl;
+
+            if (string.IsNullOrEmpty(updateUrl))
+            {
+                // Fallback: construct URL from OSS domain and prefix
+                if (!string.IsNullOrEmpty(options.OssDomain) && !string.IsNullOrEmpty(options.AppUpdaterOssObjectPrefix))
+                {
+                    updateUrl =
+                        $"{options.OssDomain.TrimEnd('/')}/{options.AppUpdaterOssObjectPrefix.TrimEnd('/')}/releases/{GetRid()}/";
+                }
+                else
+                {
+                    throw new InvalidOperationException(
+                        "Velopack update URL is not configured. Set VelopackUpdateUrl or OssDomain + AppUpdaterOssObjectPrefix.");
+                }
+            }
+
+            var source = new SimpleWebSource(updateUrl);
+            var mgr = new UpdateManager(source, new UpdateOptions
+            {
+                AllowVersionDowngrade = false,
+                ExplicitChannel = _appOptionsManager.Value.EnablePreReleaseChannel ? "beta" : null
+            });
+
+            return mgr;
         }
 
-        public async Task StartUpdater()
+        private static string GetRid()
         {
-            var newVersion = await CheckNewVersion();
-            if (newVersion == null)
+            var os = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "win"
+                : RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "osx"
+                : RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "linux"
+                : "unknown";
+            var arch = RuntimeInformation.OSArchitecture switch
             {
-                throw new InvalidOperationException("No new version available.");
+                Architecture.X64 => "x64",
+                Architecture.Arm64 => "arm64",
+                Architecture.X86 => "x86",
+                _ => "x64"
+            };
+            return $"{os}-{arch}";
+        }
+
+        public async Task<AppVersionInfo?> CheckNewVersion()
+        {
+            try
+            {
+                var mgr = CreateUpdateManager();
+                var updateInfo = await mgr.CheckForUpdatesAsync();
+
+                if (updateInfo == null)
+                {
+                    return null;
+                }
+
+                _lastUpdateInfo = updateInfo;
+
+                var version = updateInfo.TargetFullRelease.Version.ToString();
+                var rid = GetRid();
+                var osParts = rid.Split('-');
+
+                OSPlatform? platform = osParts[0] switch
+                {
+                    "win" => OSPlatform.Windows,
+                    "osx" => OSPlatform.OSX,
+                    "linux" => OSPlatform.Linux,
+                    _ => null
+                };
+
+                Enum.TryParse<Architecture>(osParts.Length > 1 ? osParts[1] : "X64", true, out var arch);
+
+                return new AppVersionInfo
+                {
+                    Version = version,
+                    Installers =
+                    [
+                        new AppVersionInfo.Installer
+                        {
+                            OsPlatform = platform,
+                            OsArchitecture = arch,
+                            Name = updateInfo.TargetFullRelease.FileName,
+                            Url = string.Empty,
+                            Size = updateInfo.TargetFullRelease.Size
+                        }
+                    ]
+                };
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Failed to check for new version via Velopack");
+                return null;
+            }
+        }
+
+        public async Task<Bootstrap.Models.ResponseModels.BaseResponse> StartUpdating()
+        {
+            if (_cts?.IsCancellationRequested == false)
+            {
+                return Bootstrap.Components.Miscellaneous.ResponseBuilders.BaseResponseBuilder.Ok;
             }
 
-            var installer = newVersion.Installers?.FirstOrDefault(a =>
-                a.OsPlatform != null && RuntimeInformation.IsOSPlatform(a.OsPlatform.Value) &&
-                RuntimeInformation.OSArchitecture == a.OsArchitecture);
-            if (installer == null)
+            _cts = new CancellationTokenSource();
+
+            await UpdateState(s =>
             {
-                throw new InvalidOperationException(
-                    $"No compatible installer found for {RuntimeInformation.OSDescription} {RuntimeInformation.OSArchitecture}.");
+                s.Reset();
+                s.StartDt = DateTime.Now;
+                s.Status = UpdaterStatus.Running;
+            });
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var mgr = CreateUpdateManager();
+
+                    if (_lastUpdateInfo == null)
+                    {
+                        _lastUpdateInfo = await mgr.CheckForUpdatesAsync();
+                    }
+
+                    if (_lastUpdateInfo == null)
+                    {
+                        await UpdateState(s =>
+                        {
+                            s.Status = UpdaterStatus.UpToDate;
+                        });
+                        return;
+                    }
+
+                    await UpdateState(s => s.TotalFileCount = 1);
+
+                    await mgr.DownloadUpdatesAsync(_lastUpdateInfo, progress =>
+                    {
+                        _ = UpdateState(s =>
+                        {
+                            s.DownloadedFileCount = progress >= 100 ? 1 : 0;
+                            s.TotalFileCount = 1;
+                        });
+                    }, cancelToken: _cts.Token);
+
+                    await UpdateState(s => s.Status = UpdaterStatus.PendingRestart);
+                }
+                catch (OperationCanceledException)
+                {
+                    await UpdateState(s =>
+                    {
+                        s.Reset();
+                        s.Status = UpdaterStatus.Idle;
+                    });
+                }
+                catch (Exception e)
+                {
+                    _logger.LogError(e, "Failed to download updates via Velopack");
+                    await UpdateState(s =>
+                    {
+                        s.Error = e.Message;
+                        s.Status = UpdaterStatus.Failed;
+                    });
+                }
+            }, _cts.Token);
+
+            return Bootstrap.Components.Miscellaneous.ResponseBuilders.BaseResponseBuilder.Ok;
+        }
+
+        public void StopUpdating()
+        {
+            _cts?.Cancel();
+        }
+
+        public async Task ApplyUpdatesAndRestart()
+        {
+            if (_lastUpdateInfo == null)
+            {
+                throw new InvalidOperationException("No update has been downloaded.");
             }
 
-            await _updater.StartUpdater(MainProcess.Id, MainProcess.ProcessName,
-                Path.GetDirectoryName(MainProcess.MainModule!.FileName), DownloadDir, MainProcess.MainModule.FileName,
-                installer);
+            try
+            {
+                var mgr = CreateUpdateManager();
+                mgr.ApplyUpdatesAndRestart(_lastUpdateInfo);
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Failed to apply updates and restart via Velopack");
+                throw;
+            }
+        }
+
+        public async Task UpdateState(Action<UpdaterState> update)
+        {
+            update(State);
+            if (OnStateChange != null)
+            {
+                await OnStateChange(State);
+            }
         }
     }
 }
