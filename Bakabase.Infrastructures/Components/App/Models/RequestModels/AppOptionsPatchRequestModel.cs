@@ -17,5 +17,10 @@ namespace Bakabase.Infrastructures.Components.App.Models.RequestModels
         /// Maximum degree of parallelism for CPU-intensive operations.
         /// </summary>
         public int? MaxParallelism { get; set; }
+
+        /// <summary>
+        /// IANA timezone ID (e.g. "Asia/Tokyo"). Null means no change, empty string resets to system default.
+        /// </summary>
+        public string? TimeZoneId { get; set; }
     }
 }

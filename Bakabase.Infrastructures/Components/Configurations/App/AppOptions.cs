@@ -40,6 +40,35 @@ namespace Bakabase.Infrastructures.Components.Configurations.App
         /// </summary>
         public int EffectiveMaxParallelism => MaxParallelism ?? DefaultMaxParallelism;
 
+        /// <summary>
+        /// IANA timezone ID (e.g. "Asia/Tokyo", "America/New_York").
+        /// When null, the system's local timezone is used.
+        /// </summary>
+        public string? TimeZoneId { get; set; }
+
+        /// <summary>
+        /// Gets the effective TimeZoneInfo, resolving from <see cref="TimeZoneId"/> or falling back to system local.
+        /// </summary>
+        public TimeZoneInfo EffectiveTimeZone
+        {
+            get
+            {
+                if (string.IsNullOrEmpty(TimeZoneId))
+                {
+                    return TimeZoneInfo.Local;
+                }
+
+                try
+                {
+                    return TimeZoneInfo.FindSystemTimeZoneById(TimeZoneId);
+                }
+                catch
+                {
+                    return TimeZoneInfo.Local;
+                }
+            }
+        }
+
         public bool IsNotInitialized() => Version == AppConstants.InitialVersion;
     }
 }
