@@ -44,13 +44,14 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade
 
         private UpdateManager CreateUpdateManager()
         {
-            var updateUrl = _updaterOptionsManager.Value.VelopackUpdateUrl;
+            var baseUrl = _updaterOptionsManager.Value.VelopackUpdateUrl;
 
-            if (string.IsNullOrEmpty(updateUrl))
+            if (string.IsNullOrEmpty(baseUrl))
             {
                 throw new InvalidOperationException("VelopackUpdateUrl is not configured.");
             }
 
+            var updateUrl = $"{baseUrl.TrimEnd('/')}/{GetRid()}/";
             var source = new SimpleWebSource(updateUrl);
             var mgr = new UpdateManager(source, new UpdateOptions
             {

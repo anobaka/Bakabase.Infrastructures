@@ -7,9 +7,9 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade.Abstractions
     public class UpdaterOptions
     {
         /// <summary>
-        /// Base URL for Velopack update source.
-        /// Example: https://your-domain.com/app/bakabase/releases/win-x64/
+        /// Base URL for Velopack update source (without RID suffix).
+        /// The runtime identifier (e.g. win-x64) is appended automatically.
         /// </summary>
-        public string VelopackUpdateUrl { get; set; } = null!;
+        public string VelopackUpdateUrl { get; set; } = "https://cdn-public.anobaka.com/app/bakabase/releases/";
     }
 }
