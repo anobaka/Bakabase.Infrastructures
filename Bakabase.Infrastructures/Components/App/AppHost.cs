@@ -296,7 +296,6 @@ namespace Bakabase.Infrastructures.Components.App
                 #endregion
 
                 _guiAdapter.ShowInitializationWindow(AppLocalizer.App_Initializing());
-                _guiAdapter.ShowTray(async () => await TryToExit(true));
 
                 var initialOptions = await GetInitializationOptions();
 
@@ -489,7 +488,7 @@ namespace Bakabase.Infrastructures.Components.App
         /// </summary>
         /// <returns>Cancel</returns>
         /// <exception cref="ArgumentOutOfRangeException"></exception>
-        private async Task TryToExit(bool fromTray)
+        public async Task TryToExit(bool fromTray)
         {
             AppOptions? appOptions = null;
 

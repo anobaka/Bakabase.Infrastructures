@@ -1,11 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using AspectCore.DynamicProxy;
-using JetBrains.Annotations;
 
 namespace Bakabase.Infrastructures.Components.Gui
 {
@@ -13,10 +8,6 @@ namespace Bakabase.Infrastructures.Components.Gui
     {
         public abstract void InvokeInGuiContext(Action action);
         public abstract T InvokeInGuiContext<T>(Func<T> func);
-        public abstract void ShowTray(Func<Task> onExiting);
-        public abstract void HideTray();
-        public abstract void SetTrayText(string text);
-        public abstract void SetTrayIcon(Icon icon);
         public abstract void ShowFatalErrorWindow(string message, string title = "Fatal Error");
         public abstract void ShowInitializationWindow(string processName);
         public abstract void DestroyInitializationWindow();

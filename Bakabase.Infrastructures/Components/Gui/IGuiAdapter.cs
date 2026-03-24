@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Drawing;
 using System.Threading.Tasks;
 using JetBrains.Annotations;
 
@@ -7,10 +6,6 @@ namespace Bakabase.Infrastructures.Components.Gui
 {
     public interface IGuiAdapter
     {
-        void ShowTray(Func<Task>? onExiting);
-        void HideTray();
-        void SetTrayText(string text);
-        void SetTrayIcon(Icon icon);
         void ShowFatalErrorWindow(string message, string title = "Fatal Error");
         void ShowInitializationWindow(string processName);
         void DestroyInitializationWindow();
