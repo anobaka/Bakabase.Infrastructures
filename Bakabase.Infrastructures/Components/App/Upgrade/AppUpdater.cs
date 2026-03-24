@@ -44,22 +44,11 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade
 
         private UpdateManager CreateUpdateManager()
         {
-            var options = _updaterOptionsManager.Value;
-            var updateUrl = options.VelopackUpdateUrl;
+            var updateUrl = _updaterOptionsManager.Value.VelopackUpdateUrl;
 
             if (string.IsNullOrEmpty(updateUrl))
             {
-                // Fallback: construct URL from OSS domain and prefix
-                if (!string.IsNullOrEmpty(options.OssDomain) && !string.IsNullOrEmpty(options.AppUpdaterOssObjectPrefix))
-                {
-                    updateUrl =
-                        $"{options.OssDomain.TrimEnd('/')}/{options.AppUpdaterOssObjectPrefix.TrimEnd('/')}/releases/{GetRid()}/";
-                }
-                else
-                {
-                    throw new InvalidOperationException(
-                        "Velopack update URL is not configured. Set VelopackUpdateUrl or OssDomain + AppUpdaterOssObjectPrefix.");
-                }
+                throw new InvalidOperationException("VelopackUpdateUrl is not configured.");
             }
 
             var source = new SimpleWebSource(updateUrl);
