@@ -83,6 +83,13 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade
             try
             {
                 var mgr = CreateUpdateManager();
+
+                if (!mgr.IsInstalled)
+                {
+                    _logger.LogWarning("Velopack update check skipped: application is not installed via Velopack (e.g. running in development mode)");
+                    return null;
+                }
+
                 var updateInfo = await mgr.CheckForUpdatesAsync();
 
                 if (updateInfo == null)
@@ -151,6 +158,13 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade
                 {
                     var mgr = CreateUpdateManager();
 
+                    if (!mgr.IsInstalled)
+                    {
+                        _logger.LogWarning("Velopack update skipped: application is not installed via Velopack");
+                        await UpdateState(s => s.Status = UpdaterStatus.Idle);
+                        return;
+                    }
+
                     if (_lastUpdateInfo == null)
                     {
                         _lastUpdateInfo = await mgr.CheckForUpdatesAsync();
@@ -215,6 +229,12 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade
             try
             {
                 var mgr = CreateUpdateManager();
+
+                if (!mgr.IsInstalled)
+                {
+                    throw new InvalidOperationException("Cannot apply updates: application is not installed via Velopack.");
+                }
+
                 mgr.ApplyUpdatesAndRestart(_lastUpdateInfo);
             }
             catch (Exception e)
