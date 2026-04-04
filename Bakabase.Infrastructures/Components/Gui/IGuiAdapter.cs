@@ -38,6 +38,7 @@ namespace Bakabase.Infrastructures.Components.Gui
         /// Returns a tuple: (Done: true to auto-complete, NavigateToUrl: URL to navigate next or null to keep waiting).</param>
         /// <returns>Cookie header string, or null if cancelled/unsupported.</returns>
         Task<string?> CaptureWebViewCookiesAsync(string loginUrl, string title, string[] cookieUrls,
-            Func<string, (bool Done, string? NavigateToUrl)>? onNavigated = null);
+            Func<string, (bool Done, string? NavigateToUrl)>? onNavigated = null,
+            Dictionary<string, string>? labels = null);
     }
 }
