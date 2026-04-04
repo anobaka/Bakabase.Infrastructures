@@ -22,6 +22,7 @@ namespace Bakabase.Infrastructures.Components.Gui
         public abstract bool ShowConfirmDialog(string message, string caption);
         public abstract void ChangeUiTheme(UiTheme theme);
         public abstract byte[]? GetIcon(IconType type, string path);
-        public abstract Task<string?> CaptureWebViewCookiesAsync(string loginUrl, string title, string[] cookieUrls);
+        public abstract Task<string?> CaptureWebViewCookiesAsync(string loginUrl, string title, string[] cookieUrls,
+            Func<string, (bool Done, string? NavigateToUrl)>? onNavigated = null);
     }
 }

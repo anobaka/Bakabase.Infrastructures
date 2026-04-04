@@ -33,8 +33,11 @@ namespace Bakabase.Infrastructures.Components.Gui
         /// </summary>
         /// <param name="loginUrl">The URL to navigate to for login.</param>
         /// <param name="title">Window title.</param>
-        /// <param name="cookieUrls">URLs to extract cookies from after login (e.g. target domains). On platforms with full cookie manager access, these are queried directly; otherwise document.cookie is read after navigating to each URL.</param>
+        /// <param name="cookieUrls">URLs to extract cookies from after login.</param>
+        /// <param name="onNavigated">Optional callback invoked when the WebView navigates to a new URL.
+        /// Returns a tuple: (Done: true to auto-complete, NavigateToUrl: URL to navigate next or null to keep waiting).</param>
         /// <returns>Cookie header string, or null if cancelled/unsupported.</returns>
-        Task<string?> CaptureWebViewCookiesAsync(string loginUrl, string title, string[] cookieUrls);
+        Task<string?> CaptureWebViewCookiesAsync(string loginUrl, string title, string[] cookieUrls,
+            Func<string, (bool Done, string? NavigateToUrl)>? onNavigated = null);
     }
 }
