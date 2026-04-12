@@ -72,8 +72,18 @@ namespace Bakabase.Infrastructures.Components.App
                         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                             $"{name}.Debugging");
 #else
+                    if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+                    {
+                        var name = Path.GetFileNameWithoutExtension(Process.GetCurrentProcess().MainModule?.FileName);
+                        _defaultAppDataDirectory = Path.Combine(
+                            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                            name ?? "Bakabase");
+                    }
+                    else
+                    {
                         var processDir = Path.GetDirectoryName(Assembly.GetEntryAssembly()!.Location)!;
                         _defaultAppDataDirectory = Path.Combine(processDir, "AppData");
+                    }
 #endif
                 }
 
