@@ -200,6 +200,8 @@ namespace Bakabase.Infrastructures.Components.App
         public static RuntimeMode RuntimeMode => RuntimeMode.WinForms;
 #elif RUNTIME_MODE_DOCKER
         public static RuntimeMode RuntimeMode => RuntimeMode.Docker;
+#elif RUNTIME_MODE_MACOS
+        public static RuntimeMode RuntimeMode => RuntimeMode.MacOS;
 #else
         public static RuntimeMode RuntimeMode => RuntimeMode.Dev;
 #endif

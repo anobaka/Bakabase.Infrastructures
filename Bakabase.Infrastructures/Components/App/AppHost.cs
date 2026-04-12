@@ -167,7 +167,7 @@ namespace Bakabase.Infrastructures.Components.App
             List<int> listeningPorts = [];
             switch (AppService.RuntimeMode)
             {
-                case RuntimeMode.Dev or RuntimeMode.WinForms:
+                case RuntimeMode.Dev or RuntimeMode.WinForms or RuntimeMode.MacOS:
                     if (AppService.RuntimeMode == RuntimeMode.Dev)
                     {
                         listeningPorts.Add(8080);
@@ -262,7 +262,7 @@ namespace Bakabase.Infrastructures.Components.App
             try
             {
                 // Single instance check (only for WinForms mode)
-                if (SingleInstanceId != null && AppService.RuntimeMode == RuntimeMode.WinForms)
+                if (SingleInstanceId != null && AppService.RuntimeMode is RuntimeMode.WinForms or RuntimeMode.MacOS)
                 {
                     _singleInstanceMutex = new Mutex(true, MutexName, out var createdNew);
 
