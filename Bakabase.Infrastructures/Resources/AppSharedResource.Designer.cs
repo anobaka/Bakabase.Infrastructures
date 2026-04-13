@@ -88,6 +88,15 @@ namespace Bakabase.Infrastructures.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Exiting.
+        /// </summary>
+        internal static string App_Exiting {
+            get {
+                return ResourceManager.GetString("App_Exiting", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Fatal error.
         /// </summary>
         internal static string App_FatalError {

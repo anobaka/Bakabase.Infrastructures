@@ -126,6 +126,9 @@
   <data name="App_Exit" xml:space="preserve">
     <value>Exit</value>
   </data>
+  <data name="App_Exiting" xml:space="preserve">
+    <value>Exiting</value>
+  </data>
   <data name="App_FatalError" xml:space="preserve">
     <value>Fatal error</value>
   </data>

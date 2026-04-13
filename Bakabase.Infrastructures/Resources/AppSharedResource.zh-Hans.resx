@@ -126,6 +126,9 @@
   <data name="App_Exit" xml:space="preserve">
     <value>确认退出</value>
   </data>
+  <data name="App_Exiting" xml:space="preserve">
+    <value>退出</value>
+  </data>
   <data name="App_FatalError" xml:space="preserve">
     <value>程序发生错误</value>
   </data>

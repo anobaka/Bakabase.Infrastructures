@@ -21,6 +21,7 @@ namespace Bakabase.Infrastructures.Resources
         public string App_FatalError() => this[nameof(App_FatalError)];
         public string App_Warning() => this[nameof(App_Warning)];
         public string App_Exit() => this[nameof(App_Exit)];
+        public string App_Exiting() => this[nameof(App_Exiting)];
         public string App_Minimize() => this[nameof(App_Minimize)];
         public string App_RememberMe() => this[nameof(App_RememberMe)];
         public string App_TipOnExit() => this[nameof(App_TipOnExit)];
