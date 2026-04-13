@@ -17,8 +17,11 @@ namespace Bakabase.Infrastructures.Components.Orm
             Directory.CreateDirectory(dir);
             var connectionStringBuilder = new SqliteConnectionStringBuilder {DataSource = ds };
             var connectionString = connectionStringBuilder.ToString();
-            var conn = new SqliteConnection(connectionString);
-            builder.UseSqlite(conn, t =>
+            // Use connection string instead of a shared SqliteConnection object.
+            // Sharing a single connection across scoped DbContext instances is not thread-safe
+            // and causes EF Core 9's migration lock (INSERT OR IGNORE + SELECT changes())
+            // to return incorrect results under concurrent access from background services.
+            builder.UseSqlite(connectionString, t =>
             {
                 t.CommandTimeout(10);
             });
@@ -39,7 +42,7 @@ namespace Bakabase.Infrastructures.Components.Orm
             await db.Database.ExecuteSqlRawAsync("PRAGMA auto_vacuum = INCREMENTAL");
             await db.Database.ExecuteSqlRawAsync("PRAGMA wal_checkpoint(TRUNCATE)");
             await db.Database.ExecuteSqlRawAsync("VACUUM");
-            await db.Database.ExecuteSqlRawAsync("PRAGMA wal_checkpoint(TRUNCATE)"); 
+            await db.Database.ExecuteSqlRawAsync("PRAGMA wal_checkpoint(TRUNCATE)");
             await db.Database.MigrateAsync();
         }
 
