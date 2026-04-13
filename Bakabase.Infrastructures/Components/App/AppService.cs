@@ -95,6 +95,11 @@ namespace Bakabase.Infrastructures.Components.App
         {
             get
             {
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+                {
+                    return Path.Combine(DefaultAppDataDirectory, "logs");
+                }
+
                 var exeLocation = Assembly.GetEntryAssembly()?.Location;
                 var currentDirectory = exeLocation.IsNullOrEmpty()
                     ? Directory.GetCurrentDirectory()
