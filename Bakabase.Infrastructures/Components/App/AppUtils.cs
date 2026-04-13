@@ -16,7 +16,7 @@ namespace Bakabase.Infrastructures.Components.App
         public static IHostBuilder CreateAppHostBuilder<TStartup>(params string[] args) where TStartup : class
         {
             return Host.CreateDefaultBuilder(args)
-                .UseContentRoot(AppContext.BaseDirectory)
+                .UseContentRoot(System.AppContext.BaseDirectory)
                 .ConfigureServices(sc =>
                 {
                     sc.AddSimpleLogging();
