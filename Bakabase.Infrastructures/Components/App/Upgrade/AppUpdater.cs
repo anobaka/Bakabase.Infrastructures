@@ -87,6 +87,7 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade
                 if (!mgr.IsInstalled)
                 {
                     _logger.LogWarning("Velopack update check skipped: application is not installed via Velopack (e.g. running in development mode)");
+                    await UpdateState(s => s.Status = UpdaterStatus.UpToDate);
                     return null;
                 }
 
@@ -94,6 +95,7 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade
 
                 if (updateInfo == null)
                 {
+                    await UpdateState(s => s.Status = UpdaterStatus.UpToDate);
                     return null;
                 }
 
@@ -132,6 +134,11 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade
             catch (Exception e)
             {
                 _logger.LogError(e, "Failed to check for new version via Velopack");
+                await UpdateState(s =>
+                {
+                    s.Error = e.Message;
+                    s.Status = UpdaterStatus.Failed;
+                });
                 return null;
             }
         }
