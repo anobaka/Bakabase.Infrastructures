@@ -142,7 +142,7 @@
     <value>Making backup...</value>
   </data>
   <data name="App_Migrating" xml:space="preserve">
-    <value>Migrating...</value>
+    <value>Preparing data...</value>
   </data>
   <data name="App_Minimize" xml:space="preserve">
     <value>Minimize</value>

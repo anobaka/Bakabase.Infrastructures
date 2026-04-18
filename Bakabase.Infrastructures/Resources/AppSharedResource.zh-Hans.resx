@@ -142,7 +142,7 @@
     <value>正在备份...</value>
   </data>
   <data name="App_Migrating" xml:space="preserve">
-    <value>正在迁移中...</value>
+    <value>正在准备数据...</value>
   </data>
   <data name="App_Minimize" xml:space="preserve">
     <value>最小化</value>
