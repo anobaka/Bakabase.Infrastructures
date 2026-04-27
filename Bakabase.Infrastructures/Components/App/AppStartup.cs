@@ -6,7 +6,6 @@ using Bakabase.Infrastructures.Components.Configurations.App;
 using Bakabase.Infrastructures.Components.Logging;
 using Bakabase.Infrastructures.Components.Orm;
 using Bakabase.Infrastructures.Components.Orm.Log;
-using Bakabase.Infrastructures.Components.Storage.Cleaning;
 using Bootstrap.Components.Communication.SignalR;
 using Bootstrap.Components.Doc.Swagger;
 using Bootstrap.Components.Logging.LogService.Extensions;
@@ -87,8 +86,6 @@ public abstract class AppStartup<TSwaggerCustomDocumentFilter>
         // services.AddSingleton<BackgroundTaskManager>();
 
         services.AddSpaStaticFiles(configuration => { configuration.RootPath = "web"; });
-
-        services.TryAddSingleton<CleanerManager>();
 
         services.AddUpdater();
 
