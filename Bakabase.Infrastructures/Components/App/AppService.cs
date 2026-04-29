@@ -57,55 +57,44 @@ namespace Bakabase.Infrastructures.Components.App
             }
         }
 
-        private static string _defaultAppDataDirectory;
+        private static string? _defaultAppDataDirectory;
 
+        /// <summary>
+        /// The anchor for <c>app.json</c> and the default data location when
+        /// <see cref="AppOptions.DataPath"/> is null. Resolved once per process via
+        /// <see cref="DefaultAppDataPathResolver"/>; the env var override is honoured.
+        /// </summary>
         public static string DefaultAppDataDirectory
         {
             get
             {
-                if (_defaultAppDataDirectory.IsNullOrEmpty())
+                if (string.IsNullOrEmpty(_defaultAppDataDirectory))
                 {
+                    var entryAssemblyName = Path.GetFileNameWithoutExtension(
+                        Process.GetCurrentProcess().MainModule?.FileName) ?? "Bakabase";
+                    bool isDebug;
 #if DEBUG
-                    var name = Path.GetFileNameWithoutExtension(Process.GetCurrentProcess().MainModule?.FileName);
-                    _defaultAppDataDirectory =
-                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                            $"{name}.Debugging");
+                    isDebug = true;
 #else
-                    if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-                    {
-                        var name = Path.GetFileNameWithoutExtension(Process.GetCurrentProcess().MainModule?.FileName);
-                        _defaultAppDataDirectory = Path.Combine(
-                            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                            name ?? "Bakabase");
-                    }
-                    else
-                    {
-                        var processDir = Path.GetDirectoryName(Assembly.GetEntryAssembly()!.Location)!;
-                        _defaultAppDataDirectory = Path.Combine(processDir, "AppData");
-                    }
+                    isDebug = false;
 #endif
+                    _defaultAppDataDirectory = DefaultAppDataPathResolver.Resolve(
+                        DefaultAppDataPathResolver.GetCurrentOsPlatform(),
+                        Environment.GetEnvironmentVariable,
+                        Environment.GetFolderPath,
+                        entryAssemblyName,
+                        isDebug);
                 }
 
                 return _defaultAppDataDirectory;
             }
         }
 
-        internal static string? LogPath
-        {
-            get
-            {
-                if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-                {
-                    return Path.Combine(DefaultAppDataDirectory, "logs");
-                }
-
-                var exeLocation = Assembly.GetEntryAssembly()?.Location;
-                var currentDirectory = exeLocation.IsNullOrEmpty()
-                    ? Directory.GetCurrentDirectory()
-                    : Path.GetDirectoryName(exeLocation);
-                return string.IsNullOrEmpty(currentDirectory) ? null : Path.Combine(currentDirectory, "logs");
-            }
-        }
+        /// <summary>
+        /// Logs co-locate with the anchor (i.e. <see cref="DefaultAppDataDirectory"/>) so
+        /// the static logger can be configured before <c>AppOptions</c> is loaded.
+        /// </summary>
+        internal static string LogPath => Path.Combine(DefaultAppDataDirectory, "logs");
 
         public static void SetCulture(string language)
         {
@@ -207,7 +196,9 @@ namespace Bakabase.Infrastructures.Components.App
 
             Directory.CreateDirectory(DefaultAppDataDirectory);
 
-            Log.Logger.Information("Environment has been set up.");
+            Log.Logger.Information(
+                "Environment has been set up. AppData anchor: {Anchor}",
+                DefaultAppDataDirectory);
         }
 
 #if RUNTIME_MODE_WINFORMS
@@ -235,12 +226,58 @@ namespace Bakabase.Infrastructures.Components.App
             _serviceProvider = serviceProvider;
         }
 
-        public string AppDataDirectory => _appOptionsManager.Value.DataPath ?? DefaultAppDataDirectory;
+        /// <summary>
+        /// <see cref="DefaultAppDataPathResolver.EnvVarName"/> overrides everything (including
+        /// a user-set <see cref="AppOptions.DataPath"/>) — it is intended for Docker / headless
+        /// scenarios where the operator wants a single mounted volume.
+        /// </summary>
+        public string AppDataDirectory
+        {
+            get
+            {
+                if (IsEnvironmentDataDirOverride)
+                {
+                    return DefaultAppDataDirectory;
+                }
+
+                return _appOptionsManager.Value.DataPath ?? DefaultAppDataDirectory;
+            }
+        }
+
+        public DataPathSource DataPathSource
+        {
+            get
+            {
+                if (IsEnvironmentDataDirOverride)
+                {
+                    return DataPathSource.Environment;
+                }
+
+                return string.IsNullOrWhiteSpace(_appOptionsManager.Value.DataPath)
+                    ? DataPathSource.Default
+                    : DataPathSource.UserConfigured;
+            }
+        }
+
+        public static bool IsEnvironmentDataDirOverride =>
+            !string.IsNullOrWhiteSpace(
+                Environment.GetEnvironmentVariable(DefaultAppDataPathResolver.EnvVarName));
+
+        /// <summary>
+        /// Where <c>app.json</c> lives. When <see cref="DefaultAppDataPathResolver.EnvVarName"/>
+        /// is set, this is the env-var path (anchor and data are co-located). Otherwise it is
+        /// the platform-default path, independent of the user-configured DataPath.
+        /// </summary>
+        public string AnchorPath => DefaultAppDataDirectory;
+
         public bool NeedRestart { get; set; }
         public bool NotAcceptTerms { get; set; }
 
         public string RequestAppDataDirectory(params string[] subDirs)
         {
+            // Ensure both the anchor (where app.json lives) AND the data dir exist.
+            // When DataPath is null they collapse to the same path; the second call is a no-op.
+            Directory.CreateDirectory(DefaultAppDataDirectory);
             var fullPath = Path.Combine(AppDataDirectory,
                 Path.Combine(subDirs.SelectMany(a => a.Split('/', '\\')).ToArray()));
             var dir = Directory.CreateDirectory(fullPath);
@@ -291,6 +328,10 @@ namespace Bakabase.Infrastructures.Components.App
         public AppInfo AppInfo => new()
         {
             AppDataPath = AppDataDirectory,
+            AnchorPath = AnchorPath,
+            DefaultDataPath = DefaultAppDataDirectory,
+            DataPathSource = DataPathSource,
+            EnvVarName = DefaultAppDataPathResolver.EnvVarName,
             CoreVersion = CoreVersion.ToString(),
             LogPath = LogPath,
             BackupPath = DataBackupDirectory,

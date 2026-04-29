@@ -97,8 +97,6 @@ public abstract class AppStartup<TSwaggerCustomDocumentFilter>
 
         #endregion
 
-        services.AddSingleton<AppDataMover>();
-
         services.AddResponseCaching();
     }
 

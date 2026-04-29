@@ -154,7 +154,6 @@ namespace Bakabase.Infrastructures.Components.App
                 .ConfigureServices((context, collection) =>
                 {
                     collection.AddTransient(sp => _guiAdapter)
-                        .AddSingleton<AppDataMover>()
                         .AddSingleton<AppService>()
                         .AddSingleton(_systemService);
 
@@ -327,8 +326,6 @@ namespace Bakabase.Infrastructures.Components.App
                 _appService = Host.Services.GetRequiredService<AppService>();
                 _appOptionsManager = Host.Services.GetRequiredService<IBOptionsManager<AppOptions>>();
 
-                var appDataMover = Host.Services.GetRequiredService<AppDataMover>();
-
                 // while (true)
                 // {
                 //     await Task.Delay(1000);
@@ -360,9 +357,6 @@ namespace Bakabase.Infrastructures.Components.App
                         {
                             try
                             {
-                                _guiAdapter.ShowInitializationWindow(AppLocalizer.App_Cleaning());
-                                await appDataMover.RemovePreviousCoreData();
-
                                 _guiAdapter.ShowInitializationWindow(AppLocalizer.App_MakingBackups());
                                 await Backup(Host.Services);
 

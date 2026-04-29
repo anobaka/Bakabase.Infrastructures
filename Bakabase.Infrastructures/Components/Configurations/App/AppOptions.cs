@@ -47,6 +47,12 @@ namespace Bakabase.Infrastructures.Components.Configurations.App
         public string? TimeZoneId { get; set; }
 
         /// <summary>
+        /// Set when the user dismisses the "old install AppData still exists" notice. We never
+        /// auto-delete the legacy directory; this just suppresses re-firing the banner.
+        /// </summary>
+        public DateTime? LegacyInstallNoticeDismissedAt { get; set; }
+
+        /// <summary>
         /// Gets the effective TimeZoneInfo, resolving from <see cref="TimeZoneId"/> or falling back to system local.
         /// </summary>
         public TimeZoneInfo EffectiveTimeZone
