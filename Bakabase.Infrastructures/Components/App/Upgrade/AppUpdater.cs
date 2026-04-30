@@ -95,6 +95,14 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade
 
                 _lastUpdateInfo = updateInfo;
 
+                await UpdateState(s =>
+                {
+                    if (s.Status is UpdaterStatus.UpToDate or UpdaterStatus.Failed)
+                    {
+                        s.Status = UpdaterStatus.Idle;
+                    }
+                });
+
                 var version = updateInfo.TargetFullRelease.Version.ToString();
                 var rid = GetRid();
                 var osParts = rid.Split('-');
