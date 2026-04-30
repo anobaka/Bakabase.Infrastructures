@@ -21,7 +21,7 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade
     {
         private readonly ILogger<AppUpdater> _logger;
         private readonly AppService _appService;
-        private readonly IBOptionsManager<UpdaterOptions> _updaterOptionsManager;
+        private readonly IAppUpdateSource _updateSource;
         private readonly IBOptionsManager<AppOptions> _appOptionsManager;
         private CancellationTokenSource? _cts;
 
@@ -33,24 +33,18 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade
         public AppUpdater(
             ILogger<AppUpdater> logger,
             AppService appService,
-            IBOptionsManager<UpdaterOptions> updaterOptionsManager,
+            IAppUpdateSource updateSource,
             IBOptionsManager<AppOptions> appOptionsManager)
         {
             _logger = logger;
             _appService = appService;
-            _updaterOptionsManager = updaterOptionsManager;
+            _updateSource = updateSource;
             _appOptionsManager = appOptionsManager;
         }
 
         private UpdateManager CreateUpdateManager()
         {
-            var baseUrl = _updaterOptionsManager.Value.VelopackUpdateUrl;
-
-            if (string.IsNullOrEmpty(baseUrl))
-            {
-                throw new InvalidOperationException("VelopackUpdateUrl is not configured.");
-            }
-
+            var baseUrl = _updateSource.GetBaseUrl();
             var updateUrl = $"{baseUrl.TrimEnd('/')}/{GetRid()}/";
             var source = new SimpleWebSource(updateUrl);
             var mgr = new UpdateManager(source, new UpdateOptions
