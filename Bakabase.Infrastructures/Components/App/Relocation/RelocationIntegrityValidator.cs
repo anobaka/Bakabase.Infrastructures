@@ -7,79 +7,70 @@ using Microsoft.Data.Sqlite;
 namespace Bakabase.Infrastructures.Components.App.Relocation
 {
     /// <summary>
-    /// Post-copy integrity check used by <see cref="PendingRelocationRunner"/>: confirms file
-    /// counts and total bytes match expectations and that any sqlite databases under the
-    /// staged directory pass <c>PRAGMA integrity_check</c>.
+    /// Post-copy integrity check used by <see cref="PendingRelocationRunner"/>. Walks an
+    /// explicit list of <see cref="ExpectedFile"/>s recorded during the copy step and verifies
+    /// each landed at the expected location with the expected size. Also runs
+    /// <c>PRAGMA integrity_check</c> on any SQLite databases included in that list.
+    ///
+    /// This list-based contract replaced the older "expected file count + total bytes"
+    /// pre-flight: it works correctly under merge-overwrite (where the target may legitimately
+    /// have extra files) and avoids the O(N) recursive stat of the source that the old
+    /// pre-flight required.
     /// </summary>
     public static class RelocationIntegrityValidator
     {
+        public readonly record struct ExpectedFile(string RelPath, long Bytes);
+
         public sealed class Result
         {
             public bool Ok { get; set; }
             public string? FailureReason { get; set; }
-            public long ActualFiles { get; set; }
-            public long ActualBytes { get; set; }
             public List<string> CorruptedDbFiles { get; } = new();
 
             public static Result Failure(string reason) => new() { Ok = false, FailureReason = reason };
         }
 
         public static Result Validate(
-            string stagedRoot,
-            long expectedFiles,
-            long expectedTotalBytes,
-            IEnumerable<string>? expectedSqliteRelativePaths = null)
+            string root,
+            IReadOnlyList<ExpectedFile> expected,
+            IEnumerable<string>? sqliteRelativePaths = null)
         {
-            if (!Directory.Exists(stagedRoot))
+            if (!Directory.Exists(root))
             {
-                return Result.Failure($"Staged root '{stagedRoot}' does not exist.");
+                return Result.Failure($"Root '{root}' does not exist.");
             }
 
-            long fileCount = 0;
-            long totalBytes = 0;
-
-            foreach (var file in Directory.EnumerateFiles(stagedRoot, "*", SearchOption.AllDirectories))
+            foreach (var entry in expected)
             {
-                fileCount++;
+                var path = Path.Combine(root, entry.RelPath);
+                if (!File.Exists(path))
+                {
+                    return Result.Failure($"Expected file missing: '{entry.RelPath}'.");
+                }
+
+                long actual;
                 try
                 {
-                    totalBytes += new FileInfo(file).Length;
+                    actual = new FileInfo(path).Length;
                 }
-                catch (FileNotFoundException)
+                catch (Exception ex)
                 {
-                    // raced with cleanup — treat as 0
+                    return Result.Failure($"Could not stat '{entry.RelPath}': {ex.Message}");
+                }
+
+                if (actual != entry.Bytes)
+                {
+                    return Result.Failure(
+                        $"Size mismatch for '{entry.RelPath}': expected {entry.Bytes}, got {actual}.");
                 }
             }
 
-            var result = new Result
+            var result = new Result();
+            if (sqliteRelativePaths != null)
             {
-                ActualFiles = fileCount,
-                ActualBytes = totalBytes,
-            };
-
-            if (fileCount != expectedFiles)
-            {
-                result.Ok = false;
-                result.FailureReason =
-                    $"File count mismatch: expected {expectedFiles}, got {fileCount}.";
-                return result;
-            }
-
-            // Allow a tolerance of zero — copying is byte-faithful unless mid-flight files
-            // truncated. Any drift here means the source changed under us.
-            if (totalBytes != expectedTotalBytes)
-            {
-                result.Ok = false;
-                result.FailureReason =
-                    $"Total bytes mismatch: expected {expectedTotalBytes}, got {totalBytes}.";
-                return result;
-            }
-
-            if (expectedSqliteRelativePaths != null)
-            {
-                foreach (var rel in expectedSqliteRelativePaths)
+                foreach (var rel in sqliteRelativePaths)
                 {
-                    var dbPath = Path.Combine(stagedRoot, rel);
+                    var dbPath = Path.Combine(root, rel);
                     if (!File.Exists(dbPath)) continue;
                     if (!IntegrityCheckSqlite(dbPath, out var error))
                     {

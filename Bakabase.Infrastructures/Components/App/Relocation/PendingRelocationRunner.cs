@@ -15,7 +15,7 @@ namespace Bakabase.Infrastructures.Components.App.Relocation
     /// <c>app.json</c> via injected callbacks. All mutations are constrained so a crash
     /// mid-run leaves the marker in place for the next launch to retry.
     /// </summary>
-    public sealed class PendingRelocationRunner
+    public static class PendingRelocationRunner
     {
         public const string StagingDirName = ".bakabase_relocate_staging";
 
@@ -92,13 +92,11 @@ namespace Bakabase.Infrastructures.Components.App.Relocation
                     case RelocationMode.UseTarget:
                         await RunUseTargetAsync(target, saveDataPath, currentDataDir, progress);
                         break;
-                    case RelocationMode.CopyToEmpty:
-                    case RelocationMode.OverwriteTarget:
-                        await RunCopyAsync(
+                    case RelocationMode.MergeOverwrite:
+                        await RunMergeAsync(
                             anchorDir,
                             currentDataDir,
                             target,
-                            marker,
                             saveDataPath,
                             progress,
                             logger,
@@ -136,11 +134,27 @@ namespace Bakabase.Infrastructures.Components.App.Relocation
             ReportProgress(progress, RelocationPhase.Done, 0, 0, 0, 0);
         }
 
-        private static async Task RunCopyAsync(
+        /// <summary>
+        /// Merge-overwrite: copy current → target via a staging dir, with same-name target
+        /// files overwritten and target-only files preserved (e.g. third-party caches under
+        /// the same folder). Steps:
+        ///
+        /// <list type="number">
+        /// <item>Pre-count source files (cheap dirent walk, no stat per file).</item>
+        /// <item>Copy each source file to <c>target/.bakabase_relocate_staging/</c>, recording
+        /// the copied list <c>(relPath, length)</c>.</item>
+        /// <item>Validate the staged copy against that list.</item>
+        /// <item>Move every staged file up into <c>target/</c>, overwriting any same-name files.
+        /// Target-only files at any level are untouched.</item>
+        /// <item>Final integrity check at the destination.</item>
+        /// <item>Commit <c>AppOptions.DataPath</c>; best-effort delete the previous data dir if
+        /// it's not the anchor or target; delete the marker.</item>
+        /// </list>
+        /// </summary>
+        private static async Task RunMergeAsync(
             string anchorDir,
             string currentDataDir,
             string target,
-            PendingRelocation marker,
             SaveDataPathCallback saveDataPath,
             IProgress<RelocationProgress>? progress,
             ILogger logger,
@@ -158,22 +172,26 @@ namespace Bakabase.Infrastructures.Components.App.Relocation
 
             Directory.CreateDirectory(staging);
 
-            // Step 1: enumerate source files (excluding excluded items at root).
-            ReportProgress(progress, RelocationPhase.Starting, 0, 0, 0, marker.ExpectedTotalBytes);
-            var filesToCopy = EnumerateCopyableFiles(currentDataDir).ToList();
+            // Step 1: pre-count copyable files for progress UI. No per-file stat — the kernel
+            // dirent walk is bounded by file count, not file size, so this stays fast even on
+            // multi-GB AppData with many covers.
+            ReportProgress(progress, RelocationPhase.Starting, 0, 0, 0, 0);
+            var sources = EnumerateCopyableFiles(currentDataDir).ToList();
+            long totalFiles = sources.Count;
 
-            // Step 2: copy.
+            // Step 2: copy to staging, recording the list for integrity validation.
+            var copied = new List<RelocationIntegrityValidator.ExpectedFile>(sources.Count);
             long processedFiles = 0;
             long processedBytes = 0;
             ReportProgress(
                 progress,
                 RelocationPhase.Copying,
                 processedFiles,
-                marker.ExpectedFiles,
+                totalFiles,
                 processedBytes,
-                marker.ExpectedTotalBytes);
+                0);
 
-            foreach (var src in filesToCopy)
+            foreach (var src in sources)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
@@ -182,98 +200,101 @@ namespace Bakabase.Infrastructures.Components.App.Relocation
                 Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
                 File.Copy(src, dest, overwrite: false);
 
+                long length;
+                try { length = new FileInfo(src).Length; }
+                catch { length = 0; }
+
+                copied.Add(new RelocationIntegrityValidator.ExpectedFile(rel, length));
                 processedFiles++;
-                try { processedBytes += new FileInfo(src).Length; } catch { }
+                processedBytes += length;
 
                 ReportProgress(
                     progress,
                     RelocationPhase.Copying,
                     processedFiles,
-                    marker.ExpectedFiles,
+                    totalFiles,
                     processedBytes,
-                    marker.ExpectedTotalBytes,
+                    0,
                     rel);
             }
 
-            // Step 3: validate staging.
+            // Step 3: validate staging matches what we recorded.
             ReportProgress(
                 progress,
                 RelocationPhase.Validating,
                 processedFiles,
-                marker.ExpectedFiles,
+                totalFiles,
                 processedBytes,
-                marker.ExpectedTotalBytes);
+                0);
 
-            var validation = RelocationIntegrityValidator.Validate(
+            var stagedValidation = RelocationIntegrityValidator.Validate(
                 staging,
-                marker.ExpectedFiles,
-                marker.ExpectedTotalBytes,
+                copied,
                 KnownSqliteRelativePaths);
-            if (!validation.Ok)
+            if (!stagedValidation.Ok)
             {
                 throw new InvalidOperationException(
-                    $"Integrity check failed before commit: {validation.FailureReason}");
+                    $"Integrity check failed before commit: {stagedValidation.FailureReason}");
             }
 
-            // Step 4: if overwrite mode, clear target (excluding staging dir we live in).
-            if (marker.Mode == RelocationMode.OverwriteTarget)
-            {
-                ReportProgress(
-                    progress,
-                    RelocationPhase.Replacing,
-                    processedFiles,
-                    marker.ExpectedFiles,
-                    processedBytes,
-                    marker.ExpectedTotalBytes);
+            // Step 4: merge staging → target. For each copied entry, move to its target path,
+            // creating intermediate dirs and overwriting same-name files. Target-only files
+            // (e.g. third-party caches at the same folder) are preserved at every level.
+            ReportProgress(
+                progress,
+                RelocationPhase.Replacing,
+                processedFiles,
+                totalFiles,
+                processedBytes,
+                0);
 
-                ClearTargetExcept(target, staging);
-            }
-
-            // Step 5: move staging contents up into target.
-            foreach (var entry in Directory.GetFileSystemEntries(staging))
+            foreach (var entry in copied)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var name = Path.GetFileName(entry);
-                var dest = Path.Combine(target, name);
-
-                if (Directory.Exists(entry))
+                var src = Path.Combine(staging, entry.RelPath);
+                var dest = Path.Combine(target, entry.RelPath);
+                Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+                if (File.Exists(dest))
                 {
-                    Directory.Move(entry, dest);
+                    File.Delete(dest);
                 }
-                else
-                {
-                    File.Move(entry, dest);
-                }
+                File.Move(src, dest);
             }
 
-            Directory.Delete(staging, recursive: true);
+            // Best-effort: prune now-empty staging subdirs. Stat order doesn't matter — we
+            // always nuke the staging root at the end.
+            try { Directory.Delete(staging, recursive: true); }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to delete staging dir at {Staging}.", staging);
+            }
 
-            // Step 6: integrity check the FINAL location (sanity — should match staging since
-            // we just renamed top-level entries).
+            // Step 5: final integrity check at the destination.
             var finalValidation = RelocationIntegrityValidator.Validate(
                 target,
-                marker.ExpectedFiles,
-                marker.ExpectedTotalBytes,
+                copied,
                 KnownSqliteRelativePaths);
             if (!finalValidation.Ok)
             {
                 throw new InvalidOperationException(
-                    $"Integrity check failed after move: {finalValidation.FailureReason}");
+                    $"Integrity check failed after merge: {finalValidation.FailureReason}");
             }
 
-            // Step 7: commit pointer change. Stash the source dir as previousDataDirIfMoved so
-            // IAppDataPathRelocator can rebase any stored absolute paths that still reference it.
+            // Step 6: commit the pointer change. Stash the source dir as previousDataDirIfMoved
+            // so IAppDataPathRelocator can rebase any stored absolute paths that still reference
+            // it.
             ReportProgress(
                 progress,
                 RelocationPhase.Finalizing,
                 processedFiles,
-                marker.ExpectedFiles,
+                totalFiles,
                 processedBytes,
-                marker.ExpectedTotalBytes);
+                0);
 
             await saveDataPath(target, previousDataDirIfMoved: currentDataDir);
 
-            // Step 8: best-effort cleanup of the previous data dir if it is now stranded.
+            // Step 7: best-effort cleanup of the previous data dir if it is now stranded
+            // (i.e. neither the anchor nor the new target).
             if (!PathsEqual(currentDataDir, anchorDir) && !PathsEqual(currentDataDir, target))
             {
                 TryDeleteDirectory(currentDataDir, logger);
@@ -287,21 +308,9 @@ namespace Bakabase.Infrastructures.Components.App.Relocation
                 progress,
                 RelocationPhase.Done,
                 processedFiles,
-                marker.ExpectedFiles,
+                totalFiles,
                 processedBytes,
-                marker.ExpectedTotalBytes);
-        }
-
-        public static (long files, long bytes) ComputeExpectedSize(string dataDir)
-        {
-            long fileCount = 0;
-            long totalBytes = 0;
-            foreach (var src in EnumerateCopyableFiles(dataDir))
-            {
-                fileCount++;
-                try { totalBytes += new FileInfo(src).Length; } catch { }
-            }
-            return (fileCount, totalBytes);
+                0);
         }
 
         public static IEnumerable<string> EnumerateCopyableFiles(string root)
@@ -324,23 +333,6 @@ namespace Bakabase.Infrastructures.Components.App.Relocation
                 else
                 {
                     yield return entry;
-                }
-            }
-        }
-
-        private static void ClearTargetExcept(string target, string keep)
-        {
-            keep = NormaliseDir(keep);
-            foreach (var entry in Directory.GetFileSystemEntries(target))
-            {
-                if (PathsEqual(entry, keep)) continue;
-                if (Directory.Exists(entry))
-                {
-                    Directory.Delete(entry, recursive: true);
-                }
-                else
-                {
-                    File.Delete(entry);
                 }
             }
         }

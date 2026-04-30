@@ -91,10 +91,32 @@ namespace Bakabase.Infrastructures.Components.App
         }
 
         /// <summary>
-        /// Logs co-locate with the anchor (i.e. <see cref="DefaultAppDataDirectory"/>) so
-        /// the static logger can be configured before <c>AppOptions</c> is loaded.
+        /// Logs follow the user's effective AppData root with the same precedence as
+        /// <see cref="AppDataDirectory"/>: env var → <c>AppOptions.DataPath</c> → platform default.
+        /// Read directly from the file-backed <see cref="AppOptionsManager.Default"/> so this
+        /// works at static-init time, before DI is built. After a successful pending relocation
+        /// the logger is re-targeted via <see cref="ReconfigureLogger"/>.
         /// </summary>
-        internal static string LogPath => Path.Combine(DefaultAppDataDirectory, "logs");
+        internal static string LogPath => Path.Combine(EffectiveLogDataDirectory, "logs");
+
+        private static string EffectiveLogDataDirectory
+        {
+            get
+            {
+                if (IsEnvironmentDataDirOverride) return DefaultAppDataDirectory;
+                try
+                {
+                    var dataPath = Configurations.App.AppOptionsManager.Default.Value.DataPath;
+                    if (!string.IsNullOrWhiteSpace(dataPath)) return dataPath;
+                }
+                catch
+                {
+                    // app.json missing / corrupt at first launch; fall through so the failure
+                    // itself is captured at the default location.
+                }
+                return DefaultAppDataDirectory;
+            }
+        }
 
         public static void SetCulture(string language)
         {
@@ -177,13 +199,22 @@ namespace Bakabase.Infrastructures.Components.App
                 NullValueHandling = NullValueHandling.Ignore
             };
 
-            var logPath = Path.Combine(LogPath ?? "logs", "AppLog_.log");
+            Log.Logger = CreateFileLogger(LogPath);
 
-            Log.Logger = new LoggerConfiguration()
+            Directory.CreateDirectory(DefaultAppDataDirectory);
+
+            Log.Logger.Information(
+                "Environment has been set up. AppData anchor: {Anchor}",
+                DefaultAppDataDirectory);
+        }
+
+        private static Serilog.ILogger CreateFileLogger(string logsDir)
+        {
+            return new LoggerConfiguration()
                 // .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
                 .Enrich.FromLogContext()
                 .WriteTo.File(
-                    logPath,
+                    Path.Combine(logsDir, "AppLog_.log"),
                     rollOnFileSizeLimit: true,
                     fileSizeLimitBytes: 100_000_000,
                     rollingInterval: RollingInterval.Day,
@@ -193,12 +224,20 @@ namespace Bakabase.Infrastructures.Components.App
                     "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level}] ({SourceContext}.{Method}) {Message}{NewLine}{Exception}"
                 )
                 .CreateLogger();
+        }
 
-            Directory.CreateDirectory(DefaultAppDataDirectory);
-
-            Log.Logger.Information(
-                "Environment has been set up. AppData anchor: {Anchor}",
-                DefaultAppDataDirectory);
+        /// <summary>
+        /// Re-target the static Serilog file sink at <paramref name="newAppDataDir"/>'s
+        /// <c>logs/</c>. Called after a successful pending-relocation run so subsequent
+        /// log writes land at the new location; the previous log files have already been
+        /// copied as part of the relocation. Caller is responsible for closing the previous
+        /// logger (e.g. via <c>Log.CloseAndFlush()</c>) before the source-dir delete on
+        /// Windows.
+        /// </summary>
+        public static void ReconfigureLogger(string newAppDataDir)
+        {
+            Log.CloseAndFlush();
+            Log.Logger = CreateFileLogger(Path.Combine(newAppDataDir, "logs"));
         }
 
 #if RUNTIME_MODE_WINFORMS
@@ -338,7 +377,18 @@ namespace Bakabase.Infrastructures.Components.App
             NotAcceptTerms = NotAcceptTerms,
             NeedRestart = NeedRestart,
             TempFilesPath = TempFilesPath,
-            DataPath = DataFilesPath
+            DataPath = DataFilesPath,
+            MayHaveLegacyData = HasPendingLegacyDataNotice(),
         };
+
+        // Resolved through the service provider so the AppService can stay decoupled from
+        // the detector singleton's registration. Returns false silently if the detector
+        // isn't wired up (e.g. headless tests).
+        private bool HasPendingLegacyDataNotice()
+        {
+            var state = _serviceProvider.GetService(typeof(LegacyInstallNoticeState))
+                as LegacyInstallNoticeState;
+            return !string.IsNullOrEmpty(state?.PendingPath);
+        }
     }
 }

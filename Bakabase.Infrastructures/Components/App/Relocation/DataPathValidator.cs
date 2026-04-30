@@ -1,8 +1,5 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Reflection;
 using System.Runtime.InteropServices;
 
 namespace Bakabase.Infrastructures.Components.App.Relocation
@@ -10,9 +7,24 @@ namespace Bakabase.Infrastructures.Components.App.Relocation
     /// <summary>
     /// Refusal-rule and target-state classifier used by the validate API. Pure logic — accepts
     /// IO callbacks for testability.
+    ///
+    /// Classification is deliberately marker-only: we look for <c>app.json</c>, the canonical
+    /// sqlite DB, or a <c>configs/</c> folder, and never enumerate the target tree. This keeps
+    /// validation O(few stat calls) regardless of how many files the user's chosen folder
+    /// contains. With merge-overwrite semantics in <see cref="PendingRelocationRunner"/>, the
+    /// distinction between "empty target" and "target with non-Bakabase files" no longer
+    /// affects behaviour, so they collapse into a single <see cref="TargetState.NeedsCopy"/>.
     /// </summary>
     public static class DataPathValidator
     {
+        /// <summary>
+        /// Default minimum free space the target must have before we let the user commit.
+        /// 1 GB is intentionally coarse — a precise "current AppData size × 1.5" check would
+        /// require an O(N) recursive stat of the source. The accurate space check is deferred
+        /// to the actual copy time, which fails fast on disk-full anyway.
+        /// </summary>
+        public const long DefaultMinFreeBytes = 1L * 1024 * 1024 * 1024;
+
         public enum RefusalReason
         {
             None = 0,
@@ -26,19 +38,33 @@ namespace Bakabase.Infrastructures.Components.App.Relocation
             InsufficientSpace,
         }
 
+        /// <summary>
+        /// Two-state target classification:
+        /// <list type="bullet">
+        /// <item><see cref="NeedsCopy"/> — target is missing, empty, or contains files we don't
+        /// recognise. Either way, the data we're copying will land on top of (and possibly
+        /// alongside) whatever's there.</item>
+        /// <item><see cref="HasBakabaseData"/> — target already holds a Bakabase install
+        /// (detected via <c>app.json</c> / canonical DB / <c>configs/</c>); the user gets to
+        /// pick between using it as-is or merging current over it.</item>
+        /// </list>
+        /// </summary>
         public enum TargetState
         {
-            DoesNotExist = 0,
-            Empty = 1,
-            HasBakabaseData = 2,
-            HasOtherFiles = 3,
+            NeedsCopy = 0,
+            HasBakabaseData = 1,
         }
 
         public sealed class Input
         {
             public string TargetPath { get; set; } = null!;
             public string CurrentDataDir { get; set; } = null!;
-            public long RequiredBytes { get; set; }
+
+            /// <summary>
+            /// Heuristic floor for free-space pre-flight. Defaults to <see cref="DefaultMinFreeBytes"/>.
+            /// </summary>
+            public long MinFreeBytes { get; set; } = DefaultMinFreeBytes;
+
             public Func<string, long> GetFreeSpaceBytes { get; set; } = null!;
             public Func<string, bool> CanWrite { get; set; } = null!;
             public Func<string, string?> FindVelopackInstallRoot { get; set; } = null!;
@@ -52,12 +78,12 @@ namespace Bakabase.Infrastructures.Components.App.Relocation
             public TargetState State { get; set; }
             public string? TargetAppVersion { get; set; }
             public long FreeSpaceBytes { get; set; }
-            public long RequiredSpaceBytes { get; set; }
+            public long MinFreeBytes { get; set; }
         }
 
         public static Output Validate(Input input)
         {
-            var output = new Output { RequiredSpaceBytes = input.RequiredBytes };
+            var output = new Output { MinFreeBytes = input.MinFreeBytes };
 
             // 1. relative / unqualified path. Platform-aware to support tests that pass
             // Windows-style paths on non-Windows hosts.
@@ -116,14 +142,14 @@ namespace Bakabase.Infrastructures.Components.App.Relocation
                 return Refuse(output, RefusalReason.NoWritePermission);
             }
 
-            // 7. classify target state
+            // 7. classify target state — marker-only, no enumeration.
             output.State = ClassifyTarget(normalisedTarget, out var version);
             output.TargetAppVersion = version;
 
-            // 8. free space (after target chosen — disk depends on path).
+            // 8. coarse free-space pre-flight. The precise check happens at copy time.
             var free = input.GetFreeSpaceBytes(normalisedTarget);
             output.FreeSpaceBytes = free;
-            if (input.RequiredBytes > 0 && free < input.RequiredBytes)
+            if (input.MinFreeBytes > 0 && free < input.MinFreeBytes)
             {
                 return Refuse(output, RefusalReason.InsufficientSpace);
             }
@@ -133,22 +159,19 @@ namespace Bakabase.Infrastructures.Components.App.Relocation
             return output;
         }
 
+        /// <summary>
+        /// Marker-only classification: 3 cheap <c>File.Exists</c> / <c>Directory.Exists</c>
+        /// calls. Does not enumerate the target tree, so cost is independent of how many
+        /// unrelated files the user happens to have in that folder.
+        /// </summary>
         public static TargetState ClassifyTarget(string target, out string? appVersion)
         {
             appVersion = null;
             if (!Directory.Exists(target))
             {
-                return TargetState.DoesNotExist;
+                return TargetState.NeedsCopy;
             }
 
-            var entries = Directory.EnumerateFileSystemEntries(target).ToList();
-            if (entries.Count == 0)
-            {
-                return TargetState.Empty;
-            }
-
-            // Heuristic: a Bakabase data dir contains an app.json at root (when target == anchor),
-            // or has the canonical sqlite db, or has configs/ + data/ subdirs.
             var appJsonPath = Path.Combine(target, "app.json");
             if (File.Exists(appJsonPath))
             {
@@ -162,7 +185,7 @@ namespace Bakabase.Infrastructures.Components.App.Relocation
                 return TargetState.HasBakabaseData;
             }
 
-            return TargetState.HasOtherFiles;
+            return TargetState.NeedsCopy;
         }
 
         private static string? TryReadAppVersion(string appJsonPath)
@@ -275,22 +298,18 @@ namespace Bakabase.Infrastructures.Components.App.Relocation
         public static bool IsSystemPath(string normalisedTarget, OSPlatform platform)
         {
             string[] prefixes;
-            StringComparison cmp;
 
             if (platform == OSPlatform.Windows)
             {
                 prefixes = WindowsSystemPrefixes;
-                cmp = StringComparison.OrdinalIgnoreCase;
             }
             else if (platform == OSPlatform.OSX)
             {
                 prefixes = MacOsSystemPrefixes;
-                cmp = StringComparison.OrdinalIgnoreCase;
             }
             else if (platform == OSPlatform.Linux)
             {
                 prefixes = LinuxSystemPrefixes;
-                cmp = StringComparison.Ordinal;
             }
             else
             {

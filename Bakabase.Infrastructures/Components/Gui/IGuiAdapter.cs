@@ -8,7 +8,15 @@ namespace Bakabase.Infrastructures.Components.Gui
     public interface IGuiAdapter
     {
         void ShowFatalErrorWindow(string message, string title = "Fatal Error");
-        void ShowInitializationWindow(string processName);
+
+        /// <summary>
+        /// Show the boot splash with an updated phase. Optionally pass a sub-line of detail
+        /// (e.g. the migrator currently running) and a determinate <paramref name="fraction"/>
+        /// in [0, 1] when the caller actually has progress to report; leave both null for the
+        /// default indeterminate appearance.
+        /// </summary>
+        void ShowInitializationWindow(string processName, string? detail = null, double? fraction = null);
+
         void DestroyInitializationWindow();
         void ShowMainWebView([NotNull] string url, [NotNull] string title, Func<Task> onClosing);
         void SetMainWindowTitle(string title);

@@ -10,7 +10,7 @@ namespace Bakabase.Infrastructures.Components.Gui
         public abstract void InvokeInGuiContext(Action action);
         public abstract T InvokeInGuiContext<T>(Func<T> func);
         public abstract void ShowFatalErrorWindow(string message, string title = "Fatal Error");
-        public abstract void ShowInitializationWindow(string processName);
+        public abstract void ShowInitializationWindow(string processName, string? detail = null, double? fraction = null);
         public abstract void DestroyInitializationWindow();
         public abstract void ShowMainWebView(string url, string title, Func<Task> onClosing);
         public abstract void SetMainWindowTitle(string title);

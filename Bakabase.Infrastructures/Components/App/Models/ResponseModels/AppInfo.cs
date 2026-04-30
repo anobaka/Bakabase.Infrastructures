@@ -43,5 +43,13 @@ namespace Bakabase.Infrastructures.Components.App.Models.ResponseModels
         public string DataPath { get; set; } = null!;
         public bool NotAcceptTerms { get; set; }
         public bool NeedRestart { get; set; }
+
+        /// <summary>
+        /// True iff <see cref="LegacyInstallAppDataDetector"/> found a populated
+        /// <c>&lt;install&gt;/current/AppData</c> the user might want to migrate, AND the user
+        /// has not dismissed the legacy notice. Used by the dashboard one-time hint to point
+        /// users at the relocation UI on first 2.3 launch.
+        /// </summary>
+        public bool MayHaveLegacyData { get; set; }
     }
 }
