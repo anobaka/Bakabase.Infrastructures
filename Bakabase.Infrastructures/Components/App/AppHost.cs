@@ -125,12 +125,13 @@ namespace Bakabase.Infrastructures.Components.App
 
         private IHost CreateHost(string[] args, ConfigurationRegistrations configurationRegistrations, AppOptions initOptions, EnvOptions envOptions)
         {
-            // {DataPath ?? AppData}/configs/*
+            // {EffectiveDataDir}/configs/* — follows the anchor redirect when set.
             var optionsDescribers =
                 configurationRegistrations.DiscoverAllOptionsDescribers(AppOptionsManager.Default
                     .GetCustomConfigurationFilesDirectory()).ToList();
 
-            // {AppData}/app.json
+            // {EffectiveDataDir}/app.json — follows the anchor redirect; same place
+            // AppOptionsManager.Default reads from, so Configuration sees the same file.
             var appOptionsDescriber =
                 optionsDescribers.FirstOrDefault(a => a.OptionsType == SpecificTypeUtils<AppOptions>.Type);
             if (appOptionsDescriber != null)
@@ -138,8 +139,9 @@ namespace Bakabase.Infrastructures.Components.App
                 optionsDescribers.Remove(appOptionsDescriber);
             }
 
+            var effectiveDataDir = EffectiveAppDataResolver.Resolve(AppService.DefaultAppDataDirectory).DataDir;
             appOptionsDescriber =
-                ConfigurationUtils.GetOptionsDescriber<AppOptions>(AppService.DefaultAppDataDirectory);
+                ConfigurationUtils.GetOptionsDescriber<AppOptions>(effectiveDataDir);
             optionsDescribers.Add(appOptionsDescriber);
 
 

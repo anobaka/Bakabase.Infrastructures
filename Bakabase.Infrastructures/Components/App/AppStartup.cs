@@ -45,7 +45,8 @@ public abstract class AppStartup<TSwaggerCustomDocumentFilter>
     public IConfiguration Configuration { get; }
     public IWebHostEnvironment Env { get; }
 
-    protected string AppDataPath => AppOptionsManager.Default.Value.DataPath ?? AppService.DefaultAppDataDirectory;
+    protected string AppDataPath =>
+        EffectiveAppDataResolver.Resolve(AppService.DefaultAppDataDirectory).DataDir;
 
     protected abstract void ConfigureServicesBeforeOthers(IServiceCollection services);
 

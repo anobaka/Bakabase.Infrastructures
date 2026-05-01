@@ -22,7 +22,28 @@ namespace Bakabase.Infrastructures.Components.Configurations.App
         public bool EnablePreReleaseChannel { get; set; }
         public bool EnableAnonymousDataTracking { get; set; } = true;
         public string WwwRootPath { get; set; } = null!;
-        public string? DataPath { get; set; }
+
+        /// <summary>
+        /// Safety net for legacy absolute-path data left in the DB. Set to the previous
+        /// data dir at the moment a relocation completes; consumed by
+        /// <see cref="Bakabase.Abstractions.Components.FileSystem.IAppDataPathRelocator"/>
+        /// to rebase any stored absolute paths under the old root → new root, then cleared
+        /// by the one-shot relocation migrator (V230 <c>PathsRelocationMigrator</c> and its
+        /// successors) after rewrites complete.
+        ///
+        /// Why this is "safety net" rather than "core mechanism": all path-bearing DB
+        /// columns are supposed to be written via <c>AppDataPaths.RelativizeAll</c> /
+        /// <c>Relativize</c>, so values are stored AppData-relative. A relative path
+        /// follows the data automatically when <c>AnchorRedirect</c> flips the effective
+        /// data dir — no rebase needed. <see cref="PrevDataPath"/> only matters when
+        /// (a) older builds wrote absolute paths into the DB before that convention took
+        /// hold, or (b) some write path forgets to relativize. If you ever audit and
+        /// confirm every writer is relative-clean, this field plus the corresponding
+        /// branch in <c>AppDataPathRelocator.CollectOldRoots</c> can be removed.
+        ///
+        /// The current data dir itself is identified by <see cref="AnchorRedirect"/> at
+        /// the platform anchor — never stored here.
+        /// </summary>
         public string PrevDataPath { get; set; } = null!;
         public CloseBehavior CloseBehavior { get; set; } = CloseBehavior.Prompt;
         public UiTheme UiTheme { get; set; }

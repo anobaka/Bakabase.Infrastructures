@@ -11,22 +11,25 @@ namespace Bakabase.Infrastructures.Components.App.Relocation
 {
     /// <summary>
     /// Restart-time relocation runner. Reads the marker dropped by the settings UI, executes
-    /// the requested mode against a real filesystem, validates the result, then updates
-    /// <c>app.json</c> via injected callbacks. All mutations are constrained so a crash
-    /// mid-run leaves the marker in place for the next launch to retry.
+    /// the requested mode against a real filesystem, validates the result, then commits the
+    /// new location via an injected callback (which writes <see cref="AnchorRedirect"/> at
+    /// the anchor + persists <c>PrevDataPath</c> into the destination's <c>app.json</c>).
+    /// All mutations are constrained so a crash mid-run leaves the marker in place for the
+    /// next launch to retry.
     /// </summary>
     public static class PendingRelocationRunner
     {
         public const string StagingDirName = ".bakabase_relocate_staging";
 
         /// <summary>
-        /// Files at the root of the data dir that must NOT be copied. <c>app.json</c> lives at
-        /// the anchor and stays there; the marker is bookkeeping, not user data.
+        /// Bookkeeping files at the root of the source data dir that must never be copied.
+        /// <c>app.json</c> follows the data and is excluded only when the target already
+        /// owns its own copy (per the "target wins" rule, evaluated per-run).
         /// </summary>
-        private static readonly HashSet<string> RootExcludes = new(StringComparer.OrdinalIgnoreCase)
+        private static readonly HashSet<string> AlwaysRootExcludes = new(StringComparer.OrdinalIgnoreCase)
         {
-            "app.json",
             PendingRelocation.FileName,
+            AnchorRedirect.FileName,
         };
 
         /// <summary>
@@ -40,23 +43,27 @@ namespace Bakabase.Infrastructures.Components.App.Relocation
         };
 
         /// <summary>
-        /// Lookup callback returning the current effective data directory (may equal
-        /// <paramref name="anchorDir"/> when the user has not customised <c>AppOptions.DataPath</c>).
+        /// Lookup callback returning the current effective data directory (equals
+        /// <paramref name="anchorDir"/> when no <see cref="AnchorRedirect"/> is in place).
         /// </summary>
         public delegate string GetCurrentDataDirCallback();
 
         /// <summary>
-        /// Persists the new <c>AppOptions.DataPath</c> value to <c>app.json</c> at the anchor.
-        /// <paramref name="previousDataDirIfMoved"/> is the directory data was copied <em>from</em>
-        /// (so stored absolute paths can be rebased by <c>IAppDataPathRelocator</c>); pass
-        /// <c>null</c> for <see cref="RelocationMode.UseTarget"/> where data did not move.
+        /// Commits the new layout. The implementation is expected to (a) update
+        /// <see cref="AnchorRedirect"/> at the anchor to point at <paramref name="newDataDir"/>
+        /// (or delete the redirect when the target equals the anchor), (b) write
+        /// <paramref name="previousDataDirIfMoved"/> into the destination's
+        /// <c>AppOptions.PrevDataPath</c> so <c>IAppDataPathRelocator</c> can rebase stored
+        /// absolute paths, and (c) clean up any anchor-side <c>app.json</c> left behind by
+        /// the legacy layout. Pass <c>null</c> for the previous dir when data did not move
+        /// (<see cref="RelocationMode.UseTarget"/>).
         /// </summary>
-        public delegate Task SaveDataPathCallback(string? newDataPath, string? previousDataDirIfMoved);
+        public delegate Task CommitDataLocationCallback(string newDataDir, string? previousDataDirIfMoved);
 
         public static async Task<RelocationOutcome> TryRunAsync(
             string anchorDir,
             GetCurrentDataDirCallback getCurrentDataDir,
-            SaveDataPathCallback saveDataPath,
+            CommitDataLocationCallback commitDataLocation,
             IProgress<RelocationProgress>? progress = null,
             ILogger? logger = null,
             CancellationToken cancellationToken = default)
@@ -90,14 +97,14 @@ namespace Bakabase.Infrastructures.Components.App.Relocation
                 switch (marker.Mode)
                 {
                     case RelocationMode.UseTarget:
-                        await RunUseTargetAsync(target, saveDataPath, currentDataDir, progress);
+                        await RunUseTargetAsync(target, commitDataLocation, currentDataDir, progress);
                         break;
                     case RelocationMode.MergeOverwrite:
                         await RunMergeAsync(
                             anchorDir,
                             currentDataDir,
                             target,
-                            saveDataPath,
+                            commitDataLocation,
                             progress,
                             logger,
                             cancellationToken);
@@ -124,12 +131,12 @@ namespace Bakabase.Infrastructures.Components.App.Relocation
 
         private static async Task RunUseTargetAsync(
             string target,
-            SaveDataPathCallback saveDataPath,
+            CommitDataLocationCallback commitDataLocation,
             string currentDataDir,
             IProgress<RelocationProgress>? progress)
         {
             ReportProgress(progress, RelocationPhase.Finalizing, 0, 0, 0, 0);
-            await saveDataPath(target, previousDataDirIfMoved: null);
+            await commitDataLocation(target, previousDataDirIfMoved: null);
             PendingRelocation.Delete(currentDataDir);
             ReportProgress(progress, RelocationPhase.Done, 0, 0, 0, 0);
         }
@@ -147,15 +154,20 @@ namespace Bakabase.Infrastructures.Components.App.Relocation
         /// <item>Move every staged file up into <c>target/</c>, overwriting any same-name files.
         /// Target-only files at any level are untouched.</item>
         /// <item>Final integrity check at the destination.</item>
-        /// <item>Commit <c>AppOptions.DataPath</c>; best-effort delete the previous data dir if
-        /// it's not the anchor or target; delete the marker.</item>
+        /// <item>Commit the new layout (anchor redirect + PrevDataPath); best-effort delete
+        /// the previous data dir if it's not the anchor or target; delete the marker.</item>
         /// </list>
+        ///
+        /// "Target wins" rule for <c>app.json</c>: when the target already owns its own
+        /// <c>app.json</c>, it is excluded from the source enumeration entirely. This is the
+        /// signal that lets migrators run when adopting an older data dir — the target's
+        /// (possibly older) <c>Version</c> field stays authoritative.
         /// </summary>
         private static async Task RunMergeAsync(
             string anchorDir,
             string currentDataDir,
             string target,
-            SaveDataPathCallback saveDataPath,
+            CommitDataLocationCallback commitDataLocation,
             IProgress<RelocationProgress>? progress,
             ILogger logger,
             CancellationToken cancellationToken)
@@ -172,11 +184,23 @@ namespace Bakabase.Infrastructures.Components.App.Relocation
 
             Directory.CreateDirectory(staging);
 
+            // Per-run exclusion set: bookkeeping always, plus app.json when the target
+            // already owns one (target wins).
+            var rootExcludes = new HashSet<string>(AlwaysRootExcludes, StringComparer.OrdinalIgnoreCase);
+            var targetAppJson = Path.Combine(target, EffectiveAppDataResolver.AppOptionsFileName);
+            if (File.Exists(targetAppJson))
+            {
+                logger.LogInformation(
+                    "Target already owns {AppJson}; preserving its copy (target wins).",
+                    EffectiveAppDataResolver.AppOptionsFileName);
+                rootExcludes.Add(EffectiveAppDataResolver.AppOptionsFileName);
+            }
+
             // Step 1: pre-count copyable files for progress UI. No per-file stat — the kernel
             // dirent walk is bounded by file count, not file size, so this stays fast even on
             // multi-GB AppData with many covers.
             ReportProgress(progress, RelocationPhase.Starting, 0, 0, 0, 0);
-            var sources = EnumerateCopyableFiles(currentDataDir).ToList();
+            var sources = EnumerateCopyableFiles(currentDataDir, rootExcludes).ToList();
             long totalFiles = sources.Count;
 
             // Step 2: copy to staging, recording the list for integrity validation.
@@ -280,9 +304,10 @@ namespace Bakabase.Infrastructures.Components.App.Relocation
                     $"Integrity check failed after merge: {finalValidation.FailureReason}");
             }
 
-            // Step 6: commit the pointer change. Stash the source dir as previousDataDirIfMoved
-            // so IAppDataPathRelocator can rebase any stored absolute paths that still reference
-            // it.
+            // Step 6: commit the new layout. The callback writes the anchor redirect, then
+            // updates PrevDataPath in target's app.json (so IAppDataPathRelocator can rebase
+            // any stored absolute paths that still reference the source), and removes the
+            // legacy anchor-side app.json if any.
             ReportProgress(
                 progress,
                 RelocationPhase.Finalizing,
@@ -291,7 +316,7 @@ namespace Bakabase.Infrastructures.Components.App.Relocation
                 processedBytes,
                 0);
 
-            await saveDataPath(target, previousDataDirIfMoved: currentDataDir);
+            await commitDataLocation(target, previousDataDirIfMoved: currentDataDir);
 
             // Step 7: best-effort cleanup of the previous data dir if it is now stranded
             // (i.e. neither the anchor nor the new target).
@@ -313,14 +338,17 @@ namespace Bakabase.Infrastructures.Components.App.Relocation
                 0);
         }
 
-        public static IEnumerable<string> EnumerateCopyableFiles(string root)
+        public static IEnumerable<string> EnumerateCopyableFiles(string root) =>
+            EnumerateCopyableFiles(root, AlwaysRootExcludes);
+
+        public static IEnumerable<string> EnumerateCopyableFiles(string root, ISet<string> rootExcludes)
         {
             if (!Directory.Exists(root)) yield break;
 
             foreach (var entry in Directory.EnumerateFileSystemEntries(root))
             {
                 var name = Path.GetFileName(entry);
-                if (RootExcludes.Contains(name)) continue;
+                if (rootExcludes.Contains(name)) continue;
                 if (name.Equals(StagingDirName, StringComparison.OrdinalIgnoreCase)) continue;
 
                 if (Directory.Exists(entry))

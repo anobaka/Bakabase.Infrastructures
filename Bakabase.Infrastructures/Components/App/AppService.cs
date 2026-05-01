@@ -60,8 +60,9 @@ namespace Bakabase.Infrastructures.Components.App
         private static string? _defaultAppDataDirectory;
 
         /// <summary>
-        /// The anchor for <c>app.json</c> and the default data location when
-        /// <see cref="AppOptions.DataPath"/> is null. Resolved once per process via
+        /// The platform-fixed anchor directory. Holds <see cref="AnchorRedirect"/> when the
+        /// user has chosen a custom data dir; otherwise also holds <c>app.json</c> and the
+        /// runtime data itself. Resolved once per process via
         /// <see cref="DefaultAppDataPathResolver"/>; the env var override is honoured.
         /// </summary>
         public static string DefaultAppDataDirectory
@@ -91,11 +92,10 @@ namespace Bakabase.Infrastructures.Components.App
         }
 
         /// <summary>
-        /// Logs follow the user's effective AppData root with the same precedence as
-        /// <see cref="AppDataDirectory"/>: env var → <c>AppOptions.DataPath</c> → platform default.
-        /// Read directly from the file-backed <see cref="AppOptionsManager.Default"/> so this
-        /// works at static-init time, before DI is built. After a successful pending relocation
-        /// the logger is re-targeted via <see cref="ReconfigureLogger"/>.
+        /// Logs follow the user's effective AppData root: env var → <see cref="AnchorRedirect"/>
+        /// target → anchor itself. Resolved at static-init time before DI exists. After a
+        /// successful pending relocation the logger is re-targeted via
+        /// <see cref="ReconfigureLogger"/>.
         /// </summary>
         internal static string LogPath => Path.Combine(EffectiveLogDataDirectory, "logs");
 
@@ -106,15 +106,14 @@ namespace Bakabase.Infrastructures.Components.App
                 if (IsEnvironmentDataDirOverride) return DefaultAppDataDirectory;
                 try
                 {
-                    var dataPath = Configurations.App.AppOptionsManager.Default.Value.DataPath;
-                    if (!string.IsNullOrWhiteSpace(dataPath)) return dataPath;
+                    return EffectiveAppDataResolver.Resolve(DefaultAppDataDirectory).DataDir;
                 }
                 catch
                 {
-                    // app.json missing / corrupt at first launch; fall through so the failure
+                    // .redirect missing / corrupt at first launch; fall through so the failure
                     // itself is captured at the default location.
+                    return DefaultAppDataDirectory;
                 }
-                return DefaultAppDataDirectory;
             }
         }
 
@@ -199,9 +198,16 @@ namespace Bakabase.Infrastructures.Components.App
                 NullValueHandling = NullValueHandling.Ignore
             };
 
-            Log.Logger = CreateFileLogger(LogPath);
-
             Directory.CreateDirectory(DefaultAppDataDirectory);
+
+            // Convert pre-redirect installs (anchor-owned app.json with non-empty DataPath)
+            // into the new layout. MUST run before the logger is created — LogPath follows
+            // .redirect, and we want the very first log lines to land at the migrated
+            // location. Throws on failure (per design); the user sees the crash in the
+            // platform's event viewer rather than a silently broken layout.
+            LegacyAnchorAppJsonMigrator.RunIfNeeded(DefaultAppDataDirectory);
+
+            Log.Logger = CreateFileLogger(LogPath);
 
             Log.Logger.Information(
                 "Environment has been set up. AppData anchor: {Anchor}",
@@ -267,8 +273,9 @@ namespace Bakabase.Infrastructures.Components.App
 
         /// <summary>
         /// <see cref="DefaultAppDataPathResolver.EnvVarName"/> overrides everything (including
-        /// a user-set <see cref="AppOptions.DataPath"/>) — it is intended for Docker / headless
-        /// scenarios where the operator wants a single mounted volume.
+        /// a user-set <see cref="AnchorRedirect"/>) — it is intended for Docker / headless
+        /// scenarios where the operator wants a single mounted volume. Otherwise, follows the
+        /// anchor's redirect file when present, falling back to the anchor itself.
         /// </summary>
         public string AppDataDirectory
         {
@@ -279,7 +286,7 @@ namespace Bakabase.Infrastructures.Components.App
                     return DefaultAppDataDirectory;
                 }
 
-                return _appOptionsManager.Value.DataPath ?? DefaultAppDataDirectory;
+                return EffectiveAppDataResolver.Resolve(DefaultAppDataDirectory).DataDir;
             }
         }
 
@@ -292,9 +299,9 @@ namespace Bakabase.Infrastructures.Components.App
                     return DataPathSource.Environment;
                 }
 
-                return string.IsNullOrWhiteSpace(_appOptionsManager.Value.DataPath)
-                    ? DataPathSource.Default
-                    : DataPathSource.UserConfigured;
+                return EffectiveAppDataResolver.Resolve(DefaultAppDataDirectory).IsRedirected
+                    ? DataPathSource.UserConfigured
+                    : DataPathSource.Default;
             }
         }
 

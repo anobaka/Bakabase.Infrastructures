@@ -12,7 +12,8 @@ namespace Bakabase.Infrastructures.Components.App.Models.Constants
         Default = 0,
 
         /// <summary>
-        /// User explicitly set <c>AppOptions.DataPath</c> via the settings UI.
+        /// User redirected the data dir via the settings UI; resolved through
+        /// <c>AnchorRedirect</c> at the platform anchor.
         /// </summary>
         UserConfigured = 1,
 
