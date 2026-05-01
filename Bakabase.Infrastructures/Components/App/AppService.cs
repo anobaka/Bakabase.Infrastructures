@@ -12,6 +12,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Bakabase.Infrastructures.Components.App.Models.Constants;
 using Bakabase.Infrastructures.Components.App.Models.ResponseModels;
+using Bakabase.Infrastructures.Components.App.Relocation;
 using Bakabase.Infrastructures.Components.App.Upgrade;
 using Bakabase.Infrastructures.Components.Configurations.App;
 using Bakabase.Infrastructures.Components.Jobs;
@@ -386,6 +387,7 @@ namespace Bakabase.Infrastructures.Components.App
             TempFilesPath = TempFilesPath,
             DataPath = DataFilesPath,
             MayHaveLegacyData = HasPendingLegacyDataNotice(),
+            DataInInstallRoot = IsDataInInstallRoot(),
         };
 
         // Resolved through the service provider so the AppService can stay decoupled from
@@ -396,6 +398,23 @@ namespace Bakabase.Infrastructures.Components.App
             var state = _serviceProvider.GetService(typeof(LegacyInstallNoticeState))
                 as LegacyInstallNoticeState;
             return !string.IsNullOrEmpty(state?.PendingPath);
+        }
+
+        private bool IsDataInInstallRoot()
+        {
+            var installRoot = DataPathValidator.FindVelopackInstallRootDefault(System.AppContext.BaseDirectory);
+            if (installRoot == null) return false;
+            try
+            {
+                var dataDir = Path.TrimEndingDirectorySeparator(Path.GetFullPath(AppDataDirectory));
+                var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(installRoot));
+                if (string.Equals(dataDir, root, StringComparison.OrdinalIgnoreCase)) return true;
+                return dataDir.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                return false;
+            }
         }
     }
 }

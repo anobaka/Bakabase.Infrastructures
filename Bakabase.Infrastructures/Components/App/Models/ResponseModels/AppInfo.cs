@@ -51,5 +51,17 @@ namespace Bakabase.Infrastructures.Components.App.Models.ResponseModels
         /// users at the relocation UI on first 2.3 launch.
         /// </summary>
         public bool MayHaveLegacyData { get; set; }
+
+        /// <summary>
+        /// True iff <see cref="AppDataPath"/> resolves to anywhere inside the Velopack install
+        /// root. Such data is destroyed when the user either uninstalls Bakabase or runs
+        /// "Repair" from the installer (both wipe the install dir wholesale), so the UI
+        /// surfaces a warning. With the default Windows path now sitting outside the install
+        /// root (<c>%LocalAppData%\Bakabase.AppData</c> vs Velopack's <c>%LocalAppData%\Bakabase</c>),
+        /// this flag is normally false in fresh installs; it can still flip to true for users
+        /// inherited from the brief 2.3.0-beta.69~74 window where the anchor coincided with
+        /// the install root.
+        /// </summary>
+        public bool DataInInstallRoot { get; set; }
     }
 }

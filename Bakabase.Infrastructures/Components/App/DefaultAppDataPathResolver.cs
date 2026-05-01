@@ -14,6 +14,16 @@ namespace Bakabase.Infrastructures.Components.App
         public const string XdgDataHomeEnvVar = "XDG_DATA_HOME";
         public const string FolderName = "Bakabase";
 
+        /// <summary>
+        /// Windows-only: the AppData folder name is intentionally distinct from
+        /// <see cref="FolderName"/> so the anchor lives outside Velopack's install root
+        /// (which is named after <see cref="FolderName"/>). This way an uninstall — which
+        /// removes the install root wholesale — leaves user data alone. macOS / Linux don't
+        /// need this since their conventional AppData locations are already outside any
+        /// install tree.
+        /// </summary>
+        public const string WindowsAppDataFolderName = "Bakabase.AppData";
+
         public static string Resolve(
             OSPlatform platform,
             Func<string, string?> getEnv,
@@ -44,7 +54,7 @@ namespace Bakabase.Infrastructures.Components.App
             {
                 return Path.Combine(
                     getFolder(Environment.SpecialFolder.LocalApplicationData),
-                    FolderName);
+                    WindowsAppDataFolderName);
             }
 
             if (platform == OSPlatform.OSX)
