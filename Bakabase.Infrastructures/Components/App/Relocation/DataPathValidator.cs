@@ -79,6 +79,13 @@ namespace Bakabase.Infrastructures.Components.App.Relocation
             public string? TargetAppVersion { get; set; }
             public long FreeSpaceBytes { get; set; }
             public long MinFreeBytes { get; set; }
+
+            /// <summary>
+            /// Detected Velopack install root (when running under one), surfaced so the UI
+            /// can render it inside the <see cref="RefusalReason.InsideInstall"/> message.
+            /// Null when not running inside a Velopack install or when detection failed.
+            /// </summary>
+            public string? InstallRoot { get; set; }
         }
 
         public static Output Validate(Input input)
@@ -122,24 +129,22 @@ namespace Bakabase.Infrastructures.Components.App.Relocation
                 return Refuse(output, RefusalReason.CircularContainment);
             }
 
-            // 4. inside Velopack-managed subdirs (current/ and packages/) — these get
-            //    atomically replaced or pruned during upgrades so user data placed inside
-            //    them WILL be destroyed. The install root itself and other siblings are
-            //    safe from upgrades; the orthogonal uninstall / Repair risk is surfaced
-            //    separately via AppInfo.DataInInstallRoot, not refused here, because
-            //    refusing it would also block the recovery flow for users coming from
-            //    2.3.0-beta.69~74 (whose data physically lives at the install root).
+            // 4. anywhere inside the Velopack install root — refused wholesale. Three
+            //    distinct destruction vectors converge here:
+            //      * upgrade: atomically replaces current/, prunes packages/
+            //      * uninstall: removes the entire install root
+            //      * installer Repair: same — wipes the install root before reinstalling
+            //    Earlier we narrowed this to current/ and packages/ only (treating the
+            //    uninstall/Repair risk as a soft warning via AppInfo.DataInInstallRoot),
+            //    but the picker silently accepted dangerous siblings. Hard-refuse the
+            //    whole subtree; AppInfo.DataInInstallRoot still flags users already
+            //    physically there (2.3.0-beta.69~74 inheritance) so they can migrate out.
             var installRoot = input.FindVelopackInstallRoot(System.AppContext.BaseDirectory);
-            if (installRoot != null)
+            output.InstallRoot = installRoot;
+            if (installRoot != null &&
+                IsAncestorOrEqual(installRoot, normalisedTarget, input.Platform))
             {
-                var sep = SeparatorFor(input.Platform);
-                var currentDir = installRoot + sep + "current";
-                var packagesDir = installRoot + sep + "packages";
-                if (IsAncestorOrEqual(currentDir, normalisedTarget, input.Platform) ||
-                    IsAncestorOrEqual(packagesDir, normalisedTarget, input.Platform))
-                {
-                    return Refuse(output, RefusalReason.InsideInstall);
-                }
+                return Refuse(output, RefusalReason.InsideInstall);
             }
 
             // 5. system path
