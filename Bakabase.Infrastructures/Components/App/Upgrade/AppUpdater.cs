@@ -117,20 +117,34 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade
 
                 Enum.TryParse<Architecture>(osParts.Length > 1 ? osParts[1] : "X64", true, out var arch);
 
+                var packageId = updateInfo.TargetFullRelease.PackageId;
+                var channel = _appOptionsManager.Value.EnablePreReleaseChannel ? "beta" : null;
+                var channelSuffix = string.IsNullOrEmpty(channel) ? "" : $"-{channel}";
+                var assetBaseUrl = $"{_updateSource.GetBaseUrl().TrimEnd('/')}/{rid}";
+
+                var fileNames = new System.Collections.Generic.List<string>();
+                if (platform == OSPlatform.Windows)
+                {
+                    fileNames.Add($"{packageId}{channelSuffix}-Setup.exe");
+                    fileNames.Add($"{packageId}{channelSuffix}-Portable.zip");
+                }
+                else if (platform == OSPlatform.OSX)
+                {
+                    fileNames.Add($"{packageId}{channelSuffix}-Setup.pkg");
+                }
+
+                var installers = fileNames.Select(name => new AppVersionInfo.Installer
+                {
+                    OsPlatform = platform,
+                    OsArchitecture = arch,
+                    Name = name,
+                    Url = $"{assetBaseUrl}/{name}"
+                }).ToArray();
+
                 return new AppVersionInfo
                 {
                     Version = version,
-                    Installers =
-                    [
-                        new AppVersionInfo.Installer
-                        {
-                            OsPlatform = platform,
-                            OsArchitecture = arch,
-                            Name = updateInfo.TargetFullRelease.FileName,
-                            Url = string.Empty,
-                            Size = updateInfo.TargetFullRelease.Size
-                        }
-                    ]
+                    Installers = installers
                 };
             }
             catch (Exception e)

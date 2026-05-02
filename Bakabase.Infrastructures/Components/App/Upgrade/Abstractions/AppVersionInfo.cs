@@ -16,7 +16,6 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade.Abstractions
             public Architecture OsArchitecture { get; set; }
             public string Name { get; set; }
             public string Url { get; set; }
-            public long Size { get; set; }
 
             public string ToCommand()
             {
