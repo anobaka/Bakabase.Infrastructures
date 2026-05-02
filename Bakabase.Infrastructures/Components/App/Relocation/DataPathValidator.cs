@@ -122,12 +122,24 @@ namespace Bakabase.Infrastructures.Components.App.Relocation
                 return Refuse(output, RefusalReason.CircularContainment);
             }
 
-            // 4. inside Velopack install root
+            // 4. inside Velopack-managed subdirs (current/ and packages/) — these get
+            //    atomically replaced or pruned during upgrades so user data placed inside
+            //    them WILL be destroyed. The install root itself and other siblings are
+            //    safe from upgrades; the orthogonal uninstall / Repair risk is surfaced
+            //    separately via AppInfo.DataInInstallRoot, not refused here, because
+            //    refusing it would also block the recovery flow for users coming from
+            //    2.3.0-beta.69~74 (whose data physically lives at the install root).
             var installRoot = input.FindVelopackInstallRoot(System.AppContext.BaseDirectory);
-            if (installRoot != null &&
-                IsAncestorOrEqual(installRoot, normalisedTarget, input.Platform))
+            if (installRoot != null)
             {
-                return Refuse(output, RefusalReason.InsideInstall);
+                var sep = SeparatorFor(input.Platform);
+                var currentDir = installRoot + sep + "current";
+                var packagesDir = installRoot + sep + "packages";
+                if (IsAncestorOrEqual(currentDir, normalisedTarget, input.Platform) ||
+                    IsAncestorOrEqual(packagesDir, normalisedTarget, input.Platform))
+                {
+                    return Refuse(output, RefusalReason.InsideInstall);
+                }
             }
 
             // 5. system path
