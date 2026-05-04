@@ -14,6 +14,7 @@ namespace Bakabase.Infrastructures.Components.App.Migrations
         private readonly IServiceProvider _serviceProvider;
         private IServiceProvider _scopedServiceProvider;
         protected TService GetRequiredService<TService>() where TService : notnull => _scopedServiceProvider.GetRequiredService<TService>();
+        protected TService? GetService<TService>() => _scopedServiceProvider.GetService<TService>();
         private object? _context;
         protected ILogger Logger { get; }
 
