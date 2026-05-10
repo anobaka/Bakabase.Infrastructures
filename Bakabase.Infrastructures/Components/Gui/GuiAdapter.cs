@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+using System;
 using System.Threading.Tasks;
 using AspectCore.DynamicProxy;
 
@@ -23,7 +22,6 @@ namespace Bakabase.Infrastructures.Components.Gui
         public abstract bool ShowConfirmDialog(string message, string caption);
         public abstract void ChangeUiTheme(UiTheme theme);
         public abstract byte[]? GetIcon(IconType type, string path);
-        public abstract Task<string?> CaptureWebViewCookiesAsync(string loginUrl, string title, string[] cookieUrls,
-            Dictionary<string, string>? labels = null);
+        public abstract IWebViewSession CreateWebViewSession(WebViewSessionOptions options);
     }
 }

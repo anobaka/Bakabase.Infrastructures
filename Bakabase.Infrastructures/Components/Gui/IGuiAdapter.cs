@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+using System;
 using System.Threading.Tasks;
 using JetBrains.Annotations;
 
@@ -37,10 +36,12 @@ namespace Bakabase.Infrastructures.Components.Gui
         byte[]? GetIcon(IconType type, string? path);
 
         /// <summary>
-        /// Opens a WebView window for the user to log in to a third-party site, then extracts cookies.
-        /// The user clicks Confirm when ready. Returns null if cancelled or unsupported.
+        /// Opens a WebView window and returns a session handle the caller drives directly.
+        /// All navigation, cookie operations, and confirm/cancel signalling happen via the
+        /// returned <see cref="IWebViewSession"/> — the GUI adapter is intentionally policy-free.
+        /// Headless or non-GUI contexts return a <see cref="CancelledWebViewSession"/> whose
+        /// <see cref="IWebViewSession.WaitForUserConfirmAsync"/> immediately cancels.
         /// </summary>
-        Task<string?> CaptureWebViewCookiesAsync(string loginUrl, string title, string[] cookieUrls,
-            Dictionary<string, string>? labels = null);
+        IWebViewSession CreateWebViewSession(WebViewSessionOptions options);
     }
 }
