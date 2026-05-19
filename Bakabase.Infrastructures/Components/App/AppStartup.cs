@@ -120,6 +120,32 @@ public abstract class AppStartup<TSwaggerCustomDocumentFilter>
 
         app.UseResponseCaching();
 
+        // Workaround for https://github.com/dotnet/aspnetcore/issues/49619
+        // — ResponseCachingMiddleware crashes with
+        //   "AbsoluteExpirationRelativeToNow must be positive"
+        // when a response carries `Cache-Control: max-age=0` (which Swagger UI
+        // sets on its index.html, and a few framework paths set on dev
+        // responses). `max-age=0` semantically means "always revalidate /
+        // don't cache" — `no-store` carries the same intent and the
+        // middleware handles it correctly, so we rewrite just before the
+        // response is sent.
+        app.Use(async (ctx, next) =>
+        {
+            ctx.Response.OnStarting(() =>
+            {
+                var cc = ctx.Response.Headers.CacheControl.ToString();
+                if (!string.IsNullOrEmpty(cc) &&
+                    cc.Contains("max-age=0", StringComparison.OrdinalIgnoreCase) &&
+                    !cc.Contains("no-store", StringComparison.OrdinalIgnoreCase) &&
+                    !cc.Contains("no-cache", StringComparison.OrdinalIgnoreCase))
+                {
+                    ctx.Response.Headers.CacheControl = "no-store";
+                }
+                return System.Threading.Tasks.Task.CompletedTask;
+            });
+            await next();
+        });
+
         app.UseSimpleExceptionHandler(new SimpleExceptionHandlingOptions
         {
             ModifyResponse = async (response, e) =>
@@ -151,10 +177,12 @@ public abstract class AppStartup<TSwaggerCustomDocumentFilter>
                         OnPrepareResponse = ctx =>
                         {
                             var headers = ctx.Context.Response.GetTypedHeaders();
+                            // index.html must be revalidated on every load so users
+                            // pick up new hashed bundle references after a release;
+                            // hashed bundle files themselves remain freely cacheable.
                             headers.CacheControl = new CacheControlHeaderValue
                             {
-                                Public = true,
-                                MaxAge = TimeSpan.FromDays(0)
+                                NoCache = true,
                             };
                         },
                     };
