@@ -11,10 +11,10 @@ using Bakabase.Infrastructures.Components.Configurations.App;
 using Bootstrap.Components.Configuration.Abstractions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-// Velopack's version type, and the type UpdateManager.CurrentVersion / VelopackAsset.Version
-// are expressed in.
-using NuGet.Versioning;
 using Semver;
+// Velopack's own version type — what UpdateManager.CurrentVersion and VelopackAsset.Version
+// are expressed in. It lived in NuGet.Versioning until Velopack 1.0 replaced that dependency
+// with its own SemanticVersion, so it now comes from the Velopack namespace below.
 using Velopack;
 using Velopack.Sources;
 
