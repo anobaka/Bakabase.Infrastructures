@@ -9,7 +9,15 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade.Abstractions
         Running = 2,
         PendingRestart = 3,
         UpToDate = 4,
-        Failed = 5
+        Failed = 5,
+
+        /// <summary>
+        /// No update check can run: the app was not installed by Velopack (a development
+        /// build, or an unpacked copy), so there is no install manifest to compare against.
+        /// Distinct from <see cref="UpToDate"/>, which used to be reported here and claimed
+        /// the app was on the latest version without ever asking the server.
+        /// </summary>
+        Unavailable = 6
     }
 
     public class UpdaterState
