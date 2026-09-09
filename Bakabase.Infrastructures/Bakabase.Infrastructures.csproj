@@ -8,6 +8,12 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+		<!-- AppDataAnchor.ResetForTests: putting the anchor back is meaningless in the
+		     application (the directories exist by then) but necessary to test the switch. -->
+		<InternalsVisibleTo Include="Bakabase.Tests" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<ProjectReference Include="..\..\LazyMortal\src\Bootstrap\Bootstrap.csproj" />
 	</ItemGroup>
 
