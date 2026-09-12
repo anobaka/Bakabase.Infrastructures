@@ -134,6 +134,19 @@ namespace Bakabase.Infrastructures.Components.App
             }
         }
 
+        /// <summary>
+        /// Whether this host keeps its log in a SQLite database that needs migrating at
+        /// startup.
+        /// </summary>
+        /// <remarks>
+        /// True for a host built on <c>AppStartup</c>, which registers
+        /// <c>LogDbContext</c>. A host that composes its own services need not have one —
+        /// the thin client reads its log back out of the Serilog file instead — and for
+        /// it the migration step is not merely unnecessary but fatal, since there is no
+        /// context to resolve.
+        /// </remarks>
+        protected virtual bool HasLogDatabase => true;
+
         protected virtual Task MigrateDb(IServiceProvider serviceProvider)
         {
             return Task.CompletedTask;
@@ -392,7 +405,11 @@ namespace Bakabase.Infrastructures.Components.App
                                 await Backup(Host.Services);
 
                                 _guiAdapter.ShowInitializationWindow(AppLocalizer.App_Migrating());
-                                await Host.Services.MigrateSqliteDbContexts<LogDbContext>();
+
+                                if (HasLogDatabase)
+                                {
+                                    await Host.Services.MigrateSqliteDbContexts<LogDbContext>();
+                                }
 
                                 await Migrate(Host.Services, MigrationTiming.BeforeDbMigration);
                                 await MigrateDb(Host.Services);
