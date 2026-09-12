@@ -46,6 +46,27 @@ namespace Bakabase.Infrastructures.Components.App
 
         protected virtual int DefaultAutoListeningPortCount { get; } = 1;
 
+        /// <summary>
+        /// Which interface to bind. Every interface by default, which is what makes the
+        /// app reachable from a phone on the same network.
+        /// </summary>
+        /// <remarks>
+        /// A host that serves only its own process overrides this to a loopback address.
+        /// That is not a preference: such a host answers whoever reaches it, so binding
+        /// it to the network would put an unauthenticated door there.
+        /// </remarks>
+        protected virtual string ListeningInterface => "0.0.0.0";
+
+        /// <summary>
+        /// Ports to listen on, or null to use the configured and auto-selected ones.
+        /// </summary>
+        /// <remarks>
+        /// Overridden by a host that needs the same port on every launch — a browser
+        /// keys its storage to the origin, port included, so one that moved would look
+        /// to the user like it had forgotten their settings.
+        /// </remarks>
+        protected virtual IReadOnlyList<int>? OverrideListeningPorts() => null;
+
         public IHost Host { get; private set; }
         public string FeAddress { get; set; }
         private const string DefaultFeAddress = "http://localhost:3000";
@@ -165,6 +186,31 @@ namespace Bakabase.Infrastructures.Components.App
                     }
                 });
 
+            // A host that names its own ports has already answered this question.
+            var listeningPorts = OverrideListeningPorts()?.ToList() ?? ResolveListeningPorts(initOptions, envOptions);
+
+            Logger.LogInformation($"App will listen on port {string.Join(',', listeningPorts)}");
+
+            // 预计算 addresses，确保 CORS 配置时能获取到正确的 origins
+            var listeningAddresses = listeningPorts.Select(p => $"http://{ListeningInterface}:{p}").ToArray();
+            var apiEndpoints = listeningPorts.Select(p => $"http://localhost:{p}").ToArray();
+
+            hostBuilder = hostBuilder
+                .ConfigureServices((context, collection) =>
+                {
+                    collection.AddSingleton(new AppContext
+                    {
+                        ListeningAddresses = listeningAddresses,
+                        ApiEndpoints = apiEndpoints,
+                        ApiEndpoint = apiEndpoints.FirstOrDefault()
+                    });
+                })
+                .ConfigureWebHost(t => t.UseUrls(listeningAddresses));
+            return hostBuilder.Build();
+        }
+
+        private List<int> ResolveListeningPorts(AppOptions initOptions, EnvOptions envOptions)
+        {
             List<int> listeningPorts = [];
             switch (AppService.RuntimeMode)
             {
@@ -193,26 +239,9 @@ namespace Bakabase.Infrastructures.Components.App
                 default:
                     throw new ArgumentOutOfRangeException();
             }
-            
-            Logger.LogInformation($"App will listen on port {string.Join(',', listeningPorts)}");
 
-            // 预计算 addresses，确保 CORS 配置时能获取到正确的 origins
-            var listeningAddresses = listeningPorts.Select(p => $"http://0.0.0.0:{p}").ToArray();
-            var apiEndpoints = listeningPorts.Select(p => $"http://localhost:{p}").ToArray();
-
-            hostBuilder = hostBuilder
-                .ConfigureServices((context, collection) =>
-                {
-                    collection.AddSingleton(new AppContext
-                    {
-                        ListeningAddresses = listeningAddresses,
-                        ApiEndpoints = apiEndpoints,
-                        ApiEndpoint = apiEndpoints.FirstOrDefault()
-                    });
-                })
-                .ConfigureWebHost(t => t.UseUrls(listeningAddresses));
-            return hostBuilder.Build();
-        } 
+            return listeningPorts;
+        }
 
         private AppService _appService;
         private IBOptionsManager<AppOptions> _appOptionsManager;

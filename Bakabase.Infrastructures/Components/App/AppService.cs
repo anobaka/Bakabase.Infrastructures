@@ -80,7 +80,11 @@ namespace Bakabase.Infrastructures.Components.App
 #else
                     isDebug = false;
 #endif
+                    // Reading the anchor is what fixes the profile for this process:
+                    // from here on a directory exists, so a later switch would leave
+                    // the two halves of startup disagreeing about where data lives.
                     _defaultAppDataDirectory = DefaultAppDataPathResolver.Resolve(
+                        AppDataAnchor.Current,
                         DefaultAppDataPathResolver.GetCurrentOsPlatform(),
                         Environment.GetEnvironmentVariable,
                         Environment.GetFolderPath,
@@ -206,7 +210,13 @@ namespace Bakabase.Infrastructures.Components.App
             // .redirect, and we want the very first log lines to land at the migrated
             // location. Throws on failure (per design); the user sees the crash in the
             // platform's event viewer rather than a silently broken layout.
-            LegacyAnchorAppJsonMigrator.RunIfNeeded(DefaultAppDataDirectory);
+            //
+            // Only the all-in-one has a past to migrate: every other profile names a
+            // directory that has never shipped, so there is nothing there to convert.
+            if (AppDataAnchor.Current.IsAllInOne)
+            {
+                LegacyAnchorAppJsonMigrator.RunIfNeeded(DefaultAppDataDirectory);
+            }
 
             Log.Logger = CreateFileLogger(LogPath);
 
@@ -308,7 +318,7 @@ namespace Bakabase.Infrastructures.Components.App
 
         public static bool IsEnvironmentDataDirOverride =>
             !string.IsNullOrWhiteSpace(
-                Environment.GetEnvironmentVariable(DefaultAppDataPathResolver.EnvVarName));
+                Environment.GetEnvironmentVariable(AppDataAnchor.Current.EnvVarName));
 
         /// <summary>
         /// Where <c>app.json</c> lives. When <see cref="DefaultAppDataPathResolver.EnvVarName"/>

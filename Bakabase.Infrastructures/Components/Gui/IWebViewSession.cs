@@ -18,6 +18,17 @@ public interface IWebViewSession : IAsyncDisposable
     string? CurrentUrl { get; }
 
     /// <summary>
+    /// How this window identifies itself to the sites it visits.
+    /// </summary>
+    /// <remarks>
+    /// Asked of the session rather than assumed by the caller, because whatever is done
+    /// with a cookie afterwards has to be done as the browser that was given it. The
+    /// default is what every platform host sets, so an implementation only overrides it
+    /// if it genuinely presents itself as something else.
+    /// </remarks>
+    string UserAgent => WebViewUserAgent.ForThisPlatform;
+
+    /// <summary>
     /// Register a handler invoked after each URL change. Handlers are awaited and
     /// serialized — the next URL change waits for all in-flight handlers to complete
     /// before firing, so chain-style logic doesn't race. Handler exceptions are caught

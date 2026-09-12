@@ -10,7 +10,13 @@ namespace Bakabase.Infrastructures.Components.App
     /// </summary>
     public static class DefaultAppDataPathResolver
     {
+        /// <summary>
+        /// The all-in-one build's names, kept as constants for the callers and tests that
+        /// name them directly. Anything that has to work for either build reads
+        /// <see cref="AppDataPathProfile"/> instead.
+        /// </summary>
         public const string EnvVarName = "BAKABASE_DATA_DIR";
+
         public const string XdgDataHomeEnvVar = "XDG_DATA_HOME";
         public const string FolderName = "Bakabase";
 
@@ -24,20 +30,39 @@ namespace Bakabase.Infrastructures.Components.App
         /// </summary>
         public const string WindowsAppDataFolderName = "Bakabase.AppData";
 
+        /// <summary>
+        /// Resolves for the profile the app has always used. Kept so the many existing
+        /// callers and tests read unchanged.
+        /// </summary>
         public static string Resolve(
+            OSPlatform platform,
+            Func<string, string?> getEnv,
+            Func<Environment.SpecialFolder, string> getFolder,
+            string entryAssemblyName,
+            bool isDebug = false) =>
+            Resolve(AppDataPathProfile.AllInOne, platform, getEnv, getFolder, entryAssemblyName, isDebug);
+
+        /// <summary>
+        /// Resolves the anchor for one <paramref name="profile"/>. Every name that
+        /// separates the builds — the env var, the folder, the Windows AppData folder —
+        /// comes from the profile; the platform rules around them are shared, so the two
+        /// builds cannot drift into different conventions.
+        /// </summary>
+        public static string Resolve(
+            AppDataPathProfile profile,
             OSPlatform platform,
             Func<string, string?> getEnv,
             Func<Environment.SpecialFolder, string> getFolder,
             string entryAssemblyName,
             bool isDebug = false)
         {
-            var envOverride = getEnv(EnvVarName);
+            var envOverride = getEnv(profile.EnvVarName);
             if (!string.IsNullOrWhiteSpace(envOverride))
             {
                 if (!Path.IsPathFullyQualified(envOverride))
                 {
                     throw new InvalidOperationException(
-                        $"{EnvVarName} must be an absolute path; got '{envOverride}'.");
+                        $"{profile.EnvVarName} must be an absolute path; got '{envOverride}'.");
                 }
 
                 return Path.GetFullPath(envOverride);
@@ -54,7 +79,7 @@ namespace Bakabase.Infrastructures.Components.App
             {
                 return Path.Combine(
                     getFolder(Environment.SpecialFolder.LocalApplicationData),
-                    WindowsAppDataFolderName);
+                    profile.WindowsAppDataFolderName);
             }
 
             if (platform == OSPlatform.OSX)
@@ -63,7 +88,7 @@ namespace Bakabase.Infrastructures.Components.App
                     getFolder(Environment.SpecialFolder.UserProfile),
                     "Library",
                     "Application Support",
-                    FolderName);
+                    profile.FolderName);
             }
 
             if (platform == OSPlatform.Linux)
@@ -75,7 +100,7 @@ namespace Bakabase.Infrastructures.Components.App
                         getFolder(Environment.SpecialFolder.UserProfile),
                         ".local",
                         "share");
-                return Path.Combine(baseDir, FolderName);
+                return Path.Combine(baseDir, profile.FolderName);
             }
 
             throw new PlatformNotSupportedException($"Unsupported platform: {platform}.");
