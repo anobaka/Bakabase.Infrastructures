@@ -33,7 +33,11 @@ namespace Bakabase.Infrastructures.Components.Orm
         {
             using var scope = serviceProvider.CreateScope();
             var sp = scope.ServiceProvider;
-            var db = sp.GetService<TDbContext>();
+            // Required, not optional: this method has nothing to do when the context is
+            // absent, and the old GetService turned "nobody registered it" into a bare
+            // NullReferenceException from inside a migration step — a stack that names
+            // SQLite for a problem that is purely about registration.
+            var db = sp.GetRequiredService<TDbContext>();
 
             await db.Database.OpenConnectionAsync();
             await db.Database.ExecuteSqlRawAsync($"PRAGMA encoding = 'UTF-16';PRAGMA page_size = {65536};");
