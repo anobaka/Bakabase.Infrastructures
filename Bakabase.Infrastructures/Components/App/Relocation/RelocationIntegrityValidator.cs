@@ -92,7 +92,10 @@ namespace Bakabase.Infrastructures.Components.App.Relocation
             error = null;
             try
             {
-                using var conn = new SqliteConnection($"Data Source={dbPath};Mode=ReadOnly");
+                // Staged databases are moved immediately after validation. Pooling
+                // would retain the physical file handle after Dispose and block
+                // that move on Windows.
+                using var conn = new SqliteConnection($"Data Source={dbPath};Mode=ReadOnly;Pooling=False");
                 conn.Open();
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = "PRAGMA integrity_check;";
