@@ -45,8 +45,12 @@ public abstract class AppStartup<TSwaggerCustomDocumentFilter>
     public IConfiguration Configuration { get; }
     public IWebHostEnvironment Env { get; }
 
+    /// <summary>
+    /// Where the databases are opened: the directory the single-instance guard locks, by the
+    /// same call (see <see cref="AppDataLocator"/>).
+    /// </summary>
     protected string AppDataPath =>
-        EffectiveAppDataResolver.Resolve(AppService.DefaultAppDataDirectory).DataDir;
+        AppDataLocator.ResolveEffectiveDataDirectory(AppService.DefaultAppDataDirectory);
 
     protected abstract void ConfigureServicesBeforeOthers(IServiceCollection services);
 

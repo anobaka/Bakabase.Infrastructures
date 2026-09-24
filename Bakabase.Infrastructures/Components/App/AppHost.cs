@@ -181,7 +181,7 @@ namespace Bakabase.Infrastructures.Components.App
                 optionsDescribers.Remove(appOptionsDescriber);
             }
 
-            var effectiveDataDir = EffectiveAppDataResolver.Resolve(AppService.DefaultAppDataDirectory).DataDir;
+            var effectiveDataDir = AppDataLocator.ResolveEffectiveDataDirectory(AppService.DefaultAppDataDirectory);
             appOptionsDescriber =
                 ConfigurationUtils.GetOptionsDescriber<AppOptions>(effectiveDataDir);
             optionsDescribers.Add(appOptionsDescriber);
@@ -239,11 +239,12 @@ namespace Bakabase.Infrastructures.Components.App
                 DefaultAutoListeningPortCount,
                 (count, reserved) =>
                 {
-                    // The ports this data directory had last time, while they are still free;
-                    // see ListeningPortSelector for why a port that moves is a bug.
+                    // This data directory's own ports while they are still free — the preferred
+                    // ones, then the last used; see ListeningPortSelector for why a port that
+                    // moves is a bug.
                     memory = new ListeningPortMemory(
                         AppDataLocator.ResolveEffectiveDataDirectory(AppService.DefaultAppDataDirectory));
-                    return ListeningPortSelector.Select(count, memory.Read(), reserved,
+                    return ListeningPortSelector.Select(count, memory.Read().Candidates, reserved,
                         port => ListeningPortSelector.IsFree(port, bindAddress));
                 },
                 out var automatic);
@@ -438,10 +439,10 @@ namespace Bakabase.Infrastructures.Components.App
                         appCtx.ApiEndpoint = address;
 
                         // Only now: these ports are known to bind, so they are worth asking for
-                        // again next launch.
+                        // again next launch. A fallback never replaces the preferred ports.
                         if (_automaticPorts is { } automaticPorts)
                         {
-                            automaticPorts.Memory.Write(automaticPorts.Ports);
+                            automaticPorts.Memory.Record(automaticPorts.Ports);
                         }
 
 #if DEBUG

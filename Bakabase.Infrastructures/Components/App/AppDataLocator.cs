@@ -12,17 +12,27 @@ namespace Bakabase.Infrastructures.Components.App
     /// <para>
     /// The rule has two steps. The <i>anchor</i> is the platform default for the current
     /// <see cref="AppDataAnchor"/> profile, or the profile's environment variable
-    /// (<c>BAKABASE_DATA_DIR</c> for the app) when set. The <i>effective</i> directory is the
-    /// anchor itself under the environment variable — the operator named the directory, and
-    /// nothing may send it elsewhere — and otherwise whatever the anchor's
-    /// <see cref="AnchorRedirect"/> points at, or the anchor when there is none.
+    /// (<c>BAKABASE_DATA_DIR</c> for the app) when set. The <i>effective</i> directory is
+    /// whatever the anchor's <see cref="AnchorRedirect"/> points at, or the anchor itself when
+    /// there is none — the same with the environment variable as without it.
     /// </para>
     /// <para>
-    /// <see cref="AppService"/> exposes the same two answers, and reads them from here. They
-    /// are also needed <i>before</i> <see cref="AppService"/> may be touched: its static
-    /// constructor creates the anchor, converts a legacy layout and opens the log file, and
-    /// the single-instance guard has to know whose data directory this is before any of that
-    /// runs, or a launch that is about to be refused would already have written to it.
+    /// This is the only answer to "which directory is this process's data directory". The
+    /// database (<c>AppStartup</c>), <c>app.json</c> (<c>AppOptionsManager</c>), the option
+    /// files and the port memory (<see cref="AppHost"/>), <see cref="AppService.AppDataDirectory"/>,
+    /// the log file and the single-instance guard all ask here, so the directory the guard
+    /// locks is by construction the one the database is opened in. When they disagreed — the
+    /// guard stopping at the variable's directory, the database following a redirect inside
+    /// it — a launch that pointed the variable at an anchor with a redirect locked one
+    /// directory and opened another running instance's database. The database is the side
+    /// that was kept: it has always followed the user's chosen location, so no existing
+    /// library moves.
+    /// </para>
+    /// <para>
+    /// The answer is also needed <i>before</i> <see cref="AppService"/> may be touched: its
+    /// static constructor creates the anchor, converts a legacy layout and opens the log file,
+    /// and the single-instance guard has to know whose data directory this is before any of
+    /// that runs, or a launch that is about to be refused would already have written to it.
     /// </para>
     /// </remarks>
     public static class AppDataLocator
@@ -66,7 +76,7 @@ namespace Bakabase.Infrastructures.Components.App
         /// raises for it (see <see cref="AnchorRedirect.TryRead"/>).
         /// </exception>
         public static string ResolveEffectiveDataDirectory(string anchor) =>
-            IsEnvironmentOverride ? anchor : EffectiveAppDataResolver.Resolve(anchor).DataDir;
+            EffectiveAppDataResolver.Resolve(anchor).DataDir;
 
         /// <summary>
         /// <see cref="ResolveEffectiveDataDirectory(string)"/> for this process's own anchor.

@@ -330,7 +330,7 @@ namespace Bakabase.Infrastructures.Components.App.SingleInstance
                 {
                     var others = Leases.Count - 1;
                     return $"Single-instance guard: this process owns {lease.Directory} " +
-                           $"(activation channel {lease.Server?.ChannelName ?? "none"}" +
+                           $"(activation channel {lease.Server?.Endpoint ?? "none"}" +
                            (others > 0 ? $", plus {others} more directory lock(s))" : ")");
                 }
 

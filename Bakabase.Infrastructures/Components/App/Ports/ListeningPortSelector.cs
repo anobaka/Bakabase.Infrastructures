@@ -21,10 +21,12 @@ namespace Bakabase.Infrastructures.Components.App.Ports
     /// <c>TIME_WAIT</c> for a while after a plain restart, so its own port read as taken.
     /// </para>
     /// <para>
-    /// Now the remembered ports (see <see cref="ListeningPortMemory"/>) are tried first, in
-    /// their remembered order, and a candidate is judged by what the server will actually do
-    /// with it (<see cref="IsFree"/>). Only a port that is really taken is skipped, and only
-    /// then does the scan run.
+    /// Now the remembered ports (see <see cref="ListeningPortMemory"/>: the directory's
+    /// preferred ports, then the ones it last used) are tried first, in that order, and a
+    /// candidate is judged by what the server will actually do with it (<see cref="IsFree"/>).
+    /// Only a port that is really taken is skipped, and only then does the scan run. A port
+    /// skipped once is not forgotten: it stays preferred, and is taken again as soon as it is
+    /// free.
     /// </para>
     /// <para>
     /// The scan stays inside <see cref="WindowStart"/>..<see cref="WindowEnd"/>, below every
@@ -65,7 +67,9 @@ namespace Bakabase.Infrastructures.Components.App.Ports
         /// <paramref name="count"/> ports: the remembered ones that are still free, in their
         /// remembered order, then the first free ones in the window.
         /// </summary>
-        /// <param name="remembered">What <see cref="ListeningPortMemory.Read"/> returned.</param>
+        /// <param name="remembered">
+        /// The ports to try first, best first: <see cref="ListeningPortMemory.Remembered.Candidates"/>.
+        /// </param>
         /// <param name="reserved">Ports already spoken for by explicit configuration.</param>
         /// <param name="isFree">Injected for tests; defaults to <see cref="IsFree"/> on every interface.</param>
         /// <exception cref="IOException">No free port anywhere — not a state a real machine reaches.</exception>

@@ -83,10 +83,10 @@ namespace Bakabase.Infrastructures.Components.App
         }
 
         /// <summary>
-        /// Logs follow the user's effective AppData root: env var → <see cref="AnchorRedirect"/>
-        /// target → anchor itself. Resolved at static-init time before DI exists. After a
-        /// successful pending relocation the logger is re-targeted via
-        /// <see cref="ReconfigureLogger"/>.
+        /// Logs follow the user's effective AppData root (see <see cref="AppDataLocator"/>): the
+        /// anchor's <see cref="AnchorRedirect"/> target, or the anchor itself. Resolved at
+        /// static-init time before DI exists. After a successful pending relocation the logger
+        /// is re-targeted via <see cref="ReconfigureLogger"/>.
         /// </summary>
         internal static string LogPath => Path.Combine(EffectiveLogDataDirectory, "logs");
 
@@ -94,10 +94,9 @@ namespace Bakabase.Infrastructures.Components.App
         {
             get
             {
-                if (IsEnvironmentDataDirOverride) return DefaultAppDataDirectory;
                 try
                 {
-                    return EffectiveAppDataResolver.Resolve(DefaultAppDataDirectory).DataDir;
+                    return AppDataLocator.ResolveEffectiveDataDirectory(DefaultAppDataDirectory);
                 }
                 catch
                 {
@@ -265,10 +264,12 @@ namespace Bakabase.Infrastructures.Components.App
         }
 
         /// <summary>
-        /// <see cref="DefaultAppDataPathResolver.EnvVarName"/> overrides everything (including
-        /// a user-set <see cref="AnchorRedirect"/>) — it is intended for Docker / headless
-        /// scenarios where the operator wants a single mounted volume. Otherwise, follows the
-        /// anchor's redirect file when present, falling back to the anchor itself.
+        /// The directory the database, <c>app.json</c> and every other runtime file live in:
+        /// the anchor's redirect target when there is one, the anchor itself otherwise. The
+        /// anchor is <see cref="DefaultAppDataPathResolver.EnvVarName"/> when set (Docker,
+        /// headless and portable setups name their volume that way), so a volume without a
+        /// redirect is used as it is. See <see cref="AppDataLocator"/> for why there is only
+        /// one rule.
         /// </summary>
         public string AppDataDirectory
         {
@@ -296,9 +297,9 @@ namespace Bakabase.Infrastructures.Components.App
         public static bool IsEnvironmentDataDirOverride => AppDataLocator.IsEnvironmentOverride;
 
         /// <summary>
-        /// Where <c>app.json</c> lives. When <see cref="DefaultAppDataPathResolver.EnvVarName"/>
-        /// is set, this is the env-var path (anchor and data are co-located). Otherwise it is
-        /// the platform-default path, independent of the user-configured DataPath.
+        /// The anchor: where <see cref="AnchorRedirect"/> lives. The
+        /// <see cref="DefaultAppDataPathResolver.EnvVarName"/> path when that is set, the
+        /// platform-default path otherwise — independent of where a relocation sent the data.
         /// </summary>
         public string AnchorPath => DefaultAppDataDirectory;
 

@@ -116,8 +116,10 @@ namespace Bakabase.Infrastructures.Components.Configurations.App
             // Idempotent; cheap once .redirect exists or the user never customised DataPath.
             LegacyAnchorAppJsonMigrator.RunIfNeeded(AppService.DefaultAppDataDirectory);
 
-            var resolved = EffectiveAppDataResolver.Resolve(AppService.DefaultAppDataDirectory);
-            return (resolved.DataDir, resolved.AppJsonPath);
+            // The directory the single-instance guard locks and the database is opened in, by
+            // the same call (see AppDataLocator).
+            var dataDir = AppDataLocator.ResolveEffectiveDataDirectory(AppService.DefaultAppDataDirectory);
+            return (dataDir, Path.Combine(dataDir, EffectiveAppDataResolver.AppOptionsFileName));
         }
     }
 }
