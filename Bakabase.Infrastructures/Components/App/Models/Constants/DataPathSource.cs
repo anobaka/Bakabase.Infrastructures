@@ -18,7 +18,8 @@ namespace Bakabase.Infrastructures.Components.App.Models.Constants
         UserConfigured = 1,
 
         /// <summary>
-        /// <c>BAKABASE_DATA_DIR</c> environment variable overrode both anchor and data path.
+        /// <c>BAKABASE_DATA_DIR</c> environment variable named the anchor in place of the
+        /// platform default (an <c>AnchorRedirect</c> inside it is still followed).
         /// </summary>
         Environment = 2,
     }

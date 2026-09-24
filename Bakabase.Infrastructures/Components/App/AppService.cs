@@ -72,24 +72,10 @@ namespace Bakabase.Infrastructures.Components.App
             {
                 if (string.IsNullOrEmpty(_defaultAppDataDirectory))
                 {
-                    var entryAssemblyName = Path.GetFileNameWithoutExtension(
-                        Process.GetCurrentProcess().MainModule?.FileName) ?? "Bakabase";
-                    bool isDebug;
-#if DEBUG
-                    isDebug = true;
-#else
-                    isDebug = false;
-#endif
                     // Reading the anchor is what fixes the profile for this process:
                     // from here on a directory exists, so a later switch would leave
                     // the two halves of startup disagreeing about where data lives.
-                    _defaultAppDataDirectory = DefaultAppDataPathResolver.Resolve(
-                        AppDataAnchor.Current,
-                        DefaultAppDataPathResolver.GetCurrentOsPlatform(),
-                        Environment.GetEnvironmentVariable,
-                        Environment.GetFolderPath,
-                        entryAssemblyName,
-                        isDebug);
+                    _defaultAppDataDirectory = AppDataLocator.ResolveAnchor();
                 }
 
                 return _defaultAppDataDirectory;
@@ -97,10 +83,10 @@ namespace Bakabase.Infrastructures.Components.App
         }
 
         /// <summary>
-        /// Logs follow the user's effective AppData root: env var → <see cref="AnchorRedirect"/>
-        /// target → anchor itself. Resolved at static-init time before DI exists. After a
-        /// successful pending relocation the logger is re-targeted via
-        /// <see cref="ReconfigureLogger"/>.
+        /// Logs follow the user's effective AppData root (see <see cref="AppDataLocator"/>): the
+        /// anchor's <see cref="AnchorRedirect"/> target, or the anchor itself. Resolved at
+        /// static-init time before DI exists. After a successful pending relocation the logger
+        /// is re-targeted via <see cref="ReconfigureLogger"/>.
         /// </summary>
         internal static string LogPath => Path.Combine(EffectiveLogDataDirectory, "logs");
 
@@ -108,10 +94,9 @@ namespace Bakabase.Infrastructures.Components.App
         {
             get
             {
-                if (IsEnvironmentDataDirOverride) return DefaultAppDataDirectory;
                 try
                 {
-                    return EffectiveAppDataResolver.Resolve(DefaultAppDataDirectory).DataDir;
+                    return AppDataLocator.ResolveEffectiveDataDirectory(DefaultAppDataDirectory);
                 }
                 catch
                 {
@@ -257,15 +242,11 @@ namespace Bakabase.Infrastructures.Components.App
             Log.Logger = CreateFileLogger(Path.Combine(newAppDataDir, "logs"));
         }
 
-#if RUNTIME_MODE_WINFORMS
-        public static RuntimeMode RuntimeMode => RuntimeMode.WinForms;
-#elif RUNTIME_MODE_DOCKER
-        public static RuntimeMode RuntimeMode => RuntimeMode.Docker;
-#elif RUNTIME_MODE_MACOS
-        public static RuntimeMode RuntimeMode => RuntimeMode.MacOS;
-#else
-        public static RuntimeMode RuntimeMode => RuntimeMode.Dev;
-#endif
+        /// <summary>
+        /// Forwards to <see cref="AppRuntime.Mode"/>, which can be read without running this
+        /// class's static constructor.
+        /// </summary>
+        public static RuntimeMode RuntimeMode => AppRuntime.Mode;
 
         #endregion
 
@@ -283,21 +264,18 @@ namespace Bakabase.Infrastructures.Components.App
         }
 
         /// <summary>
-        /// <see cref="DefaultAppDataPathResolver.EnvVarName"/> overrides everything (including
-        /// a user-set <see cref="AnchorRedirect"/>) — it is intended for Docker / headless
-        /// scenarios where the operator wants a single mounted volume. Otherwise, follows the
-        /// anchor's redirect file when present, falling back to the anchor itself.
+        /// The directory the database, <c>app.json</c> and every other runtime file live in:
+        /// the anchor's redirect target when there is one, the anchor itself otherwise. The
+        /// anchor is <see cref="DefaultAppDataPathResolver.EnvVarName"/> when set (Docker,
+        /// headless and portable setups name their volume that way), so a volume without a
+        /// redirect is used as it is. See <see cref="AppDataLocator"/> for why there is only
+        /// one rule.
         /// </summary>
         public string AppDataDirectory
         {
             get
             {
-                if (IsEnvironmentDataDirOverride)
-                {
-                    return DefaultAppDataDirectory;
-                }
-
-                return EffectiveAppDataResolver.Resolve(DefaultAppDataDirectory).DataDir;
+                return AppDataLocator.ResolveEffectiveDataDirectory(DefaultAppDataDirectory);
             }
         }
 
@@ -316,14 +294,12 @@ namespace Bakabase.Infrastructures.Components.App
             }
         }
 
-        public static bool IsEnvironmentDataDirOverride =>
-            !string.IsNullOrWhiteSpace(
-                Environment.GetEnvironmentVariable(AppDataAnchor.Current.EnvVarName));
+        public static bool IsEnvironmentDataDirOverride => AppDataLocator.IsEnvironmentOverride;
 
         /// <summary>
-        /// Where <c>app.json</c> lives. When <see cref="DefaultAppDataPathResolver.EnvVarName"/>
-        /// is set, this is the env-var path (anchor and data are co-located). Otherwise it is
-        /// the platform-default path, independent of the user-configured DataPath.
+        /// The anchor: where <see cref="AnchorRedirect"/> lives. The
+        /// <see cref="DefaultAppDataPathResolver.EnvVarName"/> path when that is set, the
+        /// platform-default path otherwise — independent of where a relocation sent the data.
         /// </summary>
         public string AnchorPath => DefaultAppDataDirectory;
 
@@ -372,6 +348,14 @@ namespace Bakabase.Infrastructures.Components.App
                 // files
                 foreach (var file in Directory.GetFiles(AppDataDirectory))
                 {
+                    // Held open exclusively by this very process for as long as it runs, so it
+                    // cannot be read, let alone copied — and a copy would mean nothing anyway.
+                    if (string.Equals(Path.GetFileName(file), SingleInstance.DataDirectoryLock.FileName,
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
                     var destFileFullname = Path.Combine(targetRootDir.FullName, Path.GetFileName(file));
                     if (!File.Exists(destFileFullname))
                     {

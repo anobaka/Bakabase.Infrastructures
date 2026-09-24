@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Bakabase.Infrastructures.Components.App.SingleInstance;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -26,10 +27,16 @@ namespace Bakabase.Infrastructures.Components.App.Relocation
         /// <c>app.json</c> follows the data and is excluded only when the target already
         /// owns its own copy (per the "target wins" rule, evaluated per-run).
         /// </summary>
+        /// <remarks>
+        /// The instance lock belongs to whichever process owns a directory, not to the data:
+        /// the running app holds it open exclusively, so it could not be copied anyway, and
+        /// the target has its own.
+        /// </remarks>
         private static readonly HashSet<string> AlwaysRootExcludes = new(StringComparer.OrdinalIgnoreCase)
         {
             PendingRelocation.FileName,
             AnchorRedirect.FileName,
+            DataDirectoryLock.FileName,
         };
 
         /// <summary>
@@ -381,13 +388,45 @@ namespace Bakabase.Infrastructures.Components.App.Relocation
             }
         }
 
+        /// <summary>
+        /// Deletes everything in <paramref name="dir"/> except an instance lock the running app
+        /// still holds: the source stays owned — and a launch pointed at it stays refused —
+        /// until it is empty. The single-instance guard removes the lock file and the directory
+        /// itself once it lets go (<c>SingleInstanceGuard.Retire</c>). When nothing holds the
+        /// lock the directory goes as a whole, as it always did.
+        /// </summary>
         private static void TryDeleteDirectory(string dir, ILogger logger)
         {
             try
             {
-                if (Directory.Exists(dir))
+                if (!Directory.Exists(dir))
+                {
+                    return;
+                }
+
+                // Nobody holds it (no guard in this build, or a leftover): it goes with the rest.
+                if (DataDirectoryLock.TryDeleteUnowned(dir))
                 {
                     Directory.Delete(dir, recursive: true);
+                    return;
+                }
+
+                foreach (var entry in Directory.EnumerateFileSystemEntries(dir).ToList())
+                {
+                    if (string.Equals(Path.GetFileName(entry), DataDirectoryLock.FileName,
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    if (Directory.Exists(entry))
+                    {
+                        Directory.Delete(entry, recursive: true);
+                    }
+                    else
+                    {
+                        File.Delete(entry);
+                    }
                 }
             }
             catch (Exception ex)
