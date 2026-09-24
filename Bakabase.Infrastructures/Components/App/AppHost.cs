@@ -1,13 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.IO.Pipes;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Bakabase.Infrastructures.Components.App.Migrations;
 using Bakabase.Infrastructures.Components.App.Models.Constants;
+using Bakabase.Infrastructures.Components.App.SingleInstance;
 using Bakabase.Infrastructures.Components.Configurations.App;
 using Bakabase.Infrastructures.Components.Gui;
 using Bakabase.Infrastructures.Components.Jobs;
@@ -71,18 +71,18 @@ namespace Bakabase.Infrastructures.Components.App
         public string FeAddress { get; set; }
         private const string DefaultFeAddress = "http://localhost:3000";
 
-        // Single instance support
-        private Mutex? _singleInstanceMutex;
-        private CancellationTokenSource? _pipeServerCts;
-
         /// <summary>
-        /// Unique identifier for single instance detection. Override this to enable single instance mode.
-        /// Return null to disable single instance detection.
+        /// Identifies the product for single-instance purposes. Non-null turns the guard on for
+        /// the packaged desktop builds; null (test hosts) leaves every launch alone.
         /// </summary>
+        /// <remarks>
+        /// The guard itself keys on the data directory, not on this name — see
+        /// <see cref="SingleInstanceGuard"/>. Two builds that share a data directory must not
+        /// both run, whatever they are called, and two directories never conflict.
+        /// </remarks>
         protected virtual string? SingleInstanceId => null;
 
-        private string MutexName => $"{SingleInstanceId}_SingleInstance_Mutex";
-        private string PipeName => $"{SingleInstanceId}_SingleInstance_Pipe";
+        private bool UsesSingleInstanceGuard => SingleInstanceId != null && AppRuntime.IsPackagedDesktop;
 
         protected AppHost(IGuiAdapter guiAdapter, ISystemService systemService)
         {
@@ -304,23 +304,21 @@ namespace Bakabase.Infrastructures.Components.App
         {
             try
             {
-                // Single instance check (only for WinForms mode)
-                if (SingleInstanceId != null && AppService.RuntimeMode is RuntimeMode.WinForms or RuntimeMode.MacOS)
+                // One instance per data directory. The entry point has normally settled this
+                // already, before anything touched the directory; this is the backstop for one
+                // that did not, and a no-op otherwise. A refusal has already asked the owner to
+                // show its window.
+                if (UsesSingleInstanceGuard)
                 {
-                    _singleInstanceMutex = new Mutex(true, MutexName, out var createdNew);
-
-                    if (!createdNew)
+                    var entry = SingleInstanceGuard.Enter(
+                        AppDataLocator.ResolveEffectiveDataDirectory(AppService.DefaultAppDataDirectory));
+                    if (entry == SingleInstanceEntry.Refused)
                     {
-                        // Another instance is running, notify it to show the window
-                        await NotifyExistingInstanceAsync();
-                        _singleInstanceMutex.Dispose();
-                        _singleInstanceMutex = null;
                         _guiAdapter.Shutdown();
                         return false;
                     }
 
-                    // Start the named pipe server to listen for activation requests
-                    StartPipeServer();
+                    SingleInstanceGuard.SetActivationHandler(() => _guiAdapter.Show());
                 }
 
                 #region Initialize host services
@@ -337,6 +335,11 @@ namespace Bakabase.Infrastructures.Components.App
                 AppLocalizer = initHost.Services.GetRequiredService<AppLocalizer>();
                 InitHostServices = initHost.Services;
                 #endregion
+
+                if (UsesSingleInstanceGuard)
+                {
+                    Logger.LogInformation("{SingleInstanceGuard:l}", SingleInstanceGuard.Describe());
+                }
 
                 _guiAdapter.ShowInitializationWindow(AppLocalizer.App_Initializing());
 
@@ -460,69 +463,16 @@ namespace Bakabase.Infrastructures.Components.App
             }
         }
 
-        private void StartPipeServer()
-        {
-            _pipeServerCts = new CancellationTokenSource();
-            var ct = _pipeServerCts.Token;
-
-            Task.Run(async () =>
-            {
-                while (!ct.IsCancellationRequested)
-                {
-                    try
-                    {
-                        await using var server = new NamedPipeServerStream(
-                            PipeName,
-                            PipeDirection.In,
-                            1,
-                            PipeTransmissionMode.Byte,
-                            PipeOptions.Asynchronous);
-
-                        await server.WaitForConnectionAsync(ct);
-
-                        using var reader = new StreamReader(server);
-                        var message = await reader.ReadLineAsync(ct);
-
-                        if (message == "SHOW")
-                        {
-                            _guiAdapter.Show();
-                        }
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        break;
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger?.LogWarning(ex, "Error in single instance pipe server");
-                    }
-                }
-            }, ct);
-        }
-
-        private async Task NotifyExistingInstanceAsync()
-        {
-            try
-            {
-                await using var client = new NamedPipeClientStream(".", PipeName, PipeDirection.Out);
-                await client.ConnectAsync(3000); // 3 second timeout
-
-                await using var writer = new StreamWriter(client) { AutoFlush = true };
-                await writer.WriteLineAsync("SHOW");
-            }
-            catch (Exception ex)
-            {
-                // If we can't connect, the other instance might be stuck, just exit
-                Logger?.LogWarning(ex, "Failed to notify existing instance");
-            }
-        }
-
+        /// <summary>
+        /// Called on the way out, once the host has stopped. Gives the data directory back so
+        /// the next launch does not have to wait for this process to finish exiting.
+        /// </summary>
         public void Dispose()
         {
-            _pipeServerCts?.Cancel();
-            _pipeServerCts?.Dispose();
-            _singleInstanceMutex?.ReleaseMutex();
-            _singleInstanceMutex?.Dispose();
+            if (UsesSingleInstanceGuard)
+            {
+                SingleInstanceGuard.ReleaseAll();
+            }
         }
 
         /// <summary>

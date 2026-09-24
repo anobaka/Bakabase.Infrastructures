@@ -72,24 +72,10 @@ namespace Bakabase.Infrastructures.Components.App
             {
                 if (string.IsNullOrEmpty(_defaultAppDataDirectory))
                 {
-                    var entryAssemblyName = Path.GetFileNameWithoutExtension(
-                        Process.GetCurrentProcess().MainModule?.FileName) ?? "Bakabase";
-                    bool isDebug;
-#if DEBUG
-                    isDebug = true;
-#else
-                    isDebug = false;
-#endif
                     // Reading the anchor is what fixes the profile for this process:
                     // from here on a directory exists, so a later switch would leave
                     // the two halves of startup disagreeing about where data lives.
-                    _defaultAppDataDirectory = DefaultAppDataPathResolver.Resolve(
-                        AppDataAnchor.Current,
-                        DefaultAppDataPathResolver.GetCurrentOsPlatform(),
-                        Environment.GetEnvironmentVariable,
-                        Environment.GetFolderPath,
-                        entryAssemblyName,
-                        isDebug);
+                    _defaultAppDataDirectory = AppDataLocator.ResolveAnchor();
                 }
 
                 return _defaultAppDataDirectory;
@@ -257,15 +243,11 @@ namespace Bakabase.Infrastructures.Components.App
             Log.Logger = CreateFileLogger(Path.Combine(newAppDataDir, "logs"));
         }
 
-#if RUNTIME_MODE_WINFORMS
-        public static RuntimeMode RuntimeMode => RuntimeMode.WinForms;
-#elif RUNTIME_MODE_DOCKER
-        public static RuntimeMode RuntimeMode => RuntimeMode.Docker;
-#elif RUNTIME_MODE_MACOS
-        public static RuntimeMode RuntimeMode => RuntimeMode.MacOS;
-#else
-        public static RuntimeMode RuntimeMode => RuntimeMode.Dev;
-#endif
+        /// <summary>
+        /// Forwards to <see cref="AppRuntime.Mode"/>, which can be read without running this
+        /// class's static constructor.
+        /// </summary>
+        public static RuntimeMode RuntimeMode => AppRuntime.Mode;
 
         #endregion
 
@@ -292,12 +274,7 @@ namespace Bakabase.Infrastructures.Components.App
         {
             get
             {
-                if (IsEnvironmentDataDirOverride)
-                {
-                    return DefaultAppDataDirectory;
-                }
-
-                return EffectiveAppDataResolver.Resolve(DefaultAppDataDirectory).DataDir;
+                return AppDataLocator.ResolveEffectiveDataDirectory(DefaultAppDataDirectory);
             }
         }
 
@@ -316,9 +293,7 @@ namespace Bakabase.Infrastructures.Components.App
             }
         }
 
-        public static bool IsEnvironmentDataDirOverride =>
-            !string.IsNullOrWhiteSpace(
-                Environment.GetEnvironmentVariable(AppDataAnchor.Current.EnvVarName));
+        public static bool IsEnvironmentDataDirOverride => AppDataLocator.IsEnvironmentOverride;
 
         /// <summary>
         /// Where <c>app.json</c> lives. When <see cref="DefaultAppDataPathResolver.EnvVarName"/>
@@ -372,6 +347,14 @@ namespace Bakabase.Infrastructures.Components.App
                 // files
                 foreach (var file in Directory.GetFiles(AppDataDirectory))
                 {
+                    // Held open exclusively by this very process for as long as it runs, so it
+                    // cannot be read, let alone copied — and a copy would mean nothing anyway.
+                    if (string.Equals(Path.GetFileName(file), SingleInstance.DataDirectoryLock.FileName,
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
                     var destFileFullname = Path.Combine(targetRootDir.FullName, Path.GetFileName(file));
                     if (!File.Exists(destFileFullname))
                     {
