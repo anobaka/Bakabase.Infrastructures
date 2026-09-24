@@ -2,11 +2,13 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Bakabase.Infrastructures.Components.App.Migrations;
 using Bakabase.Infrastructures.Components.App.Models.Constants;
+using Bakabase.Infrastructures.Components.App.Ports;
 using Bakabase.Infrastructures.Components.App.SingleInstance;
 using Bakabase.Infrastructures.Components.Configurations.App;
 using Bakabase.Infrastructures.Components.Gui;
@@ -83,6 +85,12 @@ namespace Bakabase.Infrastructures.Components.App
         protected virtual string? SingleInstanceId => null;
 
         private bool UsesSingleInstanceGuard => SingleInstanceId != null && AppRuntime.IsPackagedDesktop;
+
+        /// <summary>
+        /// The ports this launch picked for itself, and where to remember them once the server
+        /// is actually listening on them. Null when every port was configured explicitly.
+        /// </summary>
+        private (IReadOnlyList<int> Ports, ListeningPortMemory Memory)? _automaticPorts;
 
         protected AppHost(IGuiAdapter guiAdapter, ISystemService systemService)
         {
@@ -224,33 +232,69 @@ namespace Bakabase.Infrastructures.Components.App
 
         private List<int> ResolveListeningPorts(AppOptions initOptions, EnvOptions envOptions)
         {
+            var bindAddress = IPAddress.TryParse(ListeningInterface, out var parsed) ? parsed : IPAddress.Any;
+            ListeningPortMemory? memory = null;
+
+            var listeningPorts = ComposeListeningPorts(AppService.RuntimeMode, initOptions, envOptions,
+                DefaultAutoListeningPortCount,
+                (count, reserved) =>
+                {
+                    // The ports this data directory had last time, while they are still free;
+                    // see ListeningPortSelector for why a port that moves is a bug.
+                    memory = new ListeningPortMemory(
+                        AppDataLocator.ResolveEffectiveDataDirectory(AppService.DefaultAppDataDirectory));
+                    return ListeningPortSelector.Select(count, memory.Read(), reserved,
+                        port => ListeningPortSelector.IsFree(port, bindAddress));
+                },
+                out var automatic);
+
+            if (memory != null && automatic.Count > 0)
+            {
+                _automaticPorts = (automatic, memory);
+            }
+
+            return listeningPorts;
+        }
+
+        /// <summary>
+        /// Every port to listen on: the configured ones exactly as configured, then — outside
+        /// Docker — <paramref name="pickAutomatic"/>'s choice of the rest.
+        /// </summary>
+        /// <remarks>
+        /// Explicit configuration is never second-guessed: <c>AppOptions.ListeningPorts</c> are
+        /// kept in their order and come first, Docker listens on exactly
+        /// <c>API_LISTENING_PORTS</c> and nothing else, and an <c>AutoListeningPortCount</c> of
+        /// zero means no automatic port at all. The configured ports are handed to
+        /// <paramref name="pickAutomatic"/> as already taken, so it never picks one twice.
+        /// </remarks>
+        internal static List<int> ComposeListeningPorts(RuntimeMode mode, AppOptions options, EnvOptions env,
+            int defaultAutomaticCount, Func<int, IReadOnlyCollection<int>, IReadOnlyList<int>> pickAutomatic,
+            out IReadOnlyList<int> automatic)
+        {
+            automatic = [];
             List<int> listeningPorts = [];
-            switch (AppService.RuntimeMode)
+            switch (mode)
             {
                 case RuntimeMode.Dev or RuntimeMode.WinForms or RuntimeMode.MacOS:
-                    if (AppService.RuntimeMode == RuntimeMode.Dev)
+                    if (mode == RuntimeMode.Dev)
                     {
                         listeningPorts.Add(8080);
                     }
-                    listeningPorts.AddRange(initOptions.ListeningPorts?.ToList() ?? []);
-                    var autoListeningPortCount = initOptions.AutoListeningPortCount ?? DefaultAutoListeningPortCount;
-                    if (autoListeningPortCount > 0)
-                    {
-                        var randomPortStart = 34567;
 
-                        for (var i = 0; i < autoListeningPortCount; i++)
-                        {
-                            var freePort = NetworkUtils.GetFreeTcpPortFrom(randomPortStart);
-                            listeningPorts.Add(freePort);
-                            randomPortStart = freePort + 1;
-                        }
+                    listeningPorts.AddRange(options.ListeningPorts ?? []);
+                    var automaticCount = options.AutoListeningPortCount ?? defaultAutomaticCount;
+                    if (automaticCount > 0)
+                    {
+                        automatic = pickAutomatic(automaticCount, listeningPorts.ToList());
+                        listeningPorts.AddRange(automatic);
                     }
+
                     break;
                 case RuntimeMode.Docker:
-                    listeningPorts = envOptions.ListeningPorts.ToList();
+                    listeningPorts = env.ListeningPorts.ToList();
                     break;
                 default:
-                    throw new ArgumentOutOfRangeException();
+                    throw new ArgumentOutOfRangeException(nameof(mode), mode, null);
             }
 
             return listeningPorts;
@@ -392,6 +436,13 @@ namespace Bakabase.Infrastructures.Components.App
                         appCtx.ListeningAddresses = listeningAddresses;
                         appCtx.ApiEndpoints = addresses;
                         appCtx.ApiEndpoint = address;
+
+                        // Only now: these ports are known to bind, so they are worth asking for
+                        // again next launch.
+                        if (_automaticPorts is { } automaticPorts)
+                        {
+                            automaticPorts.Memory.Write(automaticPorts.Ports);
+                        }
 
 #if DEBUG
                         address = FeAddress ?? DefaultFeAddress;
