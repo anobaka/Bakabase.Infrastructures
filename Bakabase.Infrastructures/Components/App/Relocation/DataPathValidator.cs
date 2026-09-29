@@ -297,9 +297,9 @@ namespace Bakabase.Infrastructures.Components.App.Relocation
             }
         }
 
-        private static readonly string[] WindowsSystemPrefixes =
+        private static readonly string[] WindowsSystemDirectoryNames =
         {
-            @"C:\Windows", @"C:\Program Files", @"C:\Program Files (x86)", @"C:\ProgramData",
+            "Windows", "Program Files", "Program Files (x86)", "ProgramData",
         };
 
         private static readonly string[] MacOsSystemPrefixes =
@@ -318,7 +318,25 @@ namespace Bakabase.Infrastructures.Components.App.Relocation
 
             if (platform == OSPlatform.Windows)
             {
-                prefixes = WindowsSystemPrefixes;
+                // Windows and Program Files can live on drives other than C:. Use the
+                // target's drive root so a data directory such as H:\Program Files\Bakabase
+                // cannot pass validation just because the install itself is elsewhere.
+                if (normalisedTarget.Length < 3 || !char.IsLetter(normalisedTarget[0]) ||
+                    normalisedTarget[1] != ':' || normalisedTarget[2] != '\\')
+                {
+                    return false;
+                }
+
+                var driveRoot = normalisedTarget.Substring(0, 3);
+                foreach (var directoryName in WindowsSystemDirectoryNames)
+                {
+                    if (IsAncestorOrEqual(driveRoot + directoryName, normalisedTarget, platform))
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
             }
             else if (platform == OSPlatform.OSX)
             {

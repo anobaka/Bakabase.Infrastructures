@@ -382,6 +382,7 @@ namespace Bakabase.Infrastructures.Components.App
             DataPath = DataFilesPath,
             MayHaveLegacyData = HasPendingLegacyDataNotice(),
             DataInInstallRoot = IsDataInInstallRoot(),
+            DataInSystemPath = IsDataInSystemPath(),
         };
 
         // Resolved through the service provider so the AppService can stay decoupled from
@@ -404,6 +405,21 @@ namespace Bakabase.Infrastructures.Components.App
                 var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(installRoot));
                 if (string.Equals(dataDir, root, StringComparison.OrdinalIgnoreCase)) return true;
                 return dataDir.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private bool IsDataInSystemPath()
+        {
+            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return false;
+
+            try
+            {
+                var path = DataPathValidator.NormalisePath(AppDataDirectory, OSPlatform.Windows);
+                return DataPathValidator.IsSystemPath(path, OSPlatform.Windows);
             }
             catch
             {

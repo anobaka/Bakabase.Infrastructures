@@ -63,5 +63,13 @@ namespace Bakabase.Infrastructures.Components.App.Models.ResponseModels
         /// the install root.
         /// </summary>
         public bool DataInInstallRoot { get; set; }
+
+        /// <summary>
+        /// True when the effective data directory is under a Windows system directory,
+        /// such as Program Files, on any drive. Existing configurations can predate the
+        /// target-path validator, so the UI should offer a move to a user-writable path.
+        /// This flag does not diagnose a particular write failure.
+        /// </summary>
+        public bool DataInSystemPath { get; set; }
     }
 }

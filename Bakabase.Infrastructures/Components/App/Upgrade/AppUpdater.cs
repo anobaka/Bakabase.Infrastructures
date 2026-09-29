@@ -360,29 +360,35 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade
             _cts?.Cancel();
         }
 
-        public async Task ApplyUpdatesAndRestart()
+        /// <summary>
+        /// Validate the downloaded release while the host is still running, then return the
+        /// Velopack launch to perform after the shell has attempted its graceful wind-down.
+        /// Velopack waits for this process to exit before applying the update and relaunching.
+        /// </summary>
+        public Action PrepareUpdateRestart()
         {
-            if (_lastUpdateInfo == null)
+            if (State.Status != UpdaterStatus.PendingRestart || _lastUpdateInfo == null)
             {
                 throw new InvalidOperationException("No update has been downloaded.");
             }
 
-            try
-            {
-                var mgr = CreateUpdateManager(CreateSource(), ResolveChannel());
+            var mgr = CreateUpdateManager(CreateSource(), ResolveChannel());
 
-                if (!mgr.IsInstalled)
-                {
-                    throw new InvalidOperationException("Cannot apply updates: application is not installed via Velopack.");
-                }
-
-                mgr.ApplyUpdatesAndRestart(_lastUpdateInfo);
-            }
-            catch (Exception e)
+            if (!mgr.IsInstalled)
             {
-                _logger.LogError(e, "Failed to apply updates and restart via Velopack");
-                throw;
+                throw new InvalidOperationException("Cannot apply updates: application is not installed via Velopack.");
             }
+
+            var pending = mgr.UpdatePendingRestart;
+            if (pending == null || !pending.Version.Equals(_lastUpdateInfo.TargetFullRelease.Version))
+            {
+                throw new InvalidOperationException("The downloaded update is no longer available. Please download it again.");
+            }
+
+            // Called after the shell's wind-down. This starts the updater
+            // without killing us; the shell then closes Avalonia normally. Keep the original
+            // exception intact for the shell to log and show in its native error window.
+            return () => mgr.WaitExitThenApplyUpdates(pending, silent: false, restart: true);
         }
 
         public async Task UpdateState(Action<UpdaterState> update)
