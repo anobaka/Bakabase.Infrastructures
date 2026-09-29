@@ -26,6 +26,7 @@ using CommandLine.Text;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -347,6 +348,7 @@ namespace Bakabase.Infrastructures.Components.App
 
         public async Task<bool> Start(string[] args)
         {
+            var startupPhase = "single-instance check";
             try
             {
                 // One instance per data directory. The entry point has normally settled this
@@ -368,6 +370,7 @@ namespace Bakabase.Infrastructures.Components.App
 
                 #region Initialize host services
 
+                startupPhase = "initial host services";
                 var initHostBuilder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder(args);
                 initHostBuilder.Configuration.AddEnvironmentVariables();
                 initHostBuilder.Services.AddSimpleLogging();
@@ -388,6 +391,7 @@ namespace Bakabase.Infrastructures.Components.App
 
                 _guiAdapter.ShowInitializationWindow(AppLocalizer.App_Initializing());
 
+                startupPhase = "initial options";
                 var initialOptions = await GetInitializationOptions();
 
                 AppService.SetCulture(initialOptions.Language);
@@ -412,17 +416,39 @@ namespace Bakabase.Infrastructures.Components.App
                     cr.AddApplicationPart(assembly);
                 }
 
+                startupPhase = "main host creation";
                 Host = CreateHost(args, cr, initialOptions, envOptions);
                 HostServices = Host.Services;
 
                 _appService = Host.Services.GetRequiredService<AppService>();
                 _appOptionsManager = Host.Services.GetRequiredService<IBOptionsManager<AppOptions>>();
 
-                // while (true)
-                // {
-                //     await Task.Delay(1000);
-                // }
+                // Run backups and migrations before starting hosted services. Background
+                // services can access the SQLite databases as soon as Host.RunAsync starts;
+                // starting them first lets those reads overlap a live-file backup and the
+                // schema migration on a new version's first launch.
+                await Task.Run(async () =>
+                {
+                    startupPhase = "backup";
+                    _guiAdapter.ShowInitializationWindow(AppLocalizer.App_MakingBackups());
+                    await Backup(Host.Services);
 
+                    startupPhase = "log database migration";
+                    _guiAdapter.ShowInitializationWindow(AppLocalizer.App_Migrating());
+                    if (HasLogDatabase)
+                    {
+                        await Host.Services.MigrateSqliteDbContexts<LogDbContext>();
+                    }
+
+                    startupPhase = "before database migration";
+                    await Migrate(Host.Services, MigrationTiming.BeforeDbMigration);
+                    startupPhase = "main database migration";
+                    await MigrateDb(Host.Services);
+                    startupPhase = "after database migration";
+                    await Migrate(Host.Services, MigrationTiming.AfterDbMigration);
+                });
+
+                startupPhase = "main host run";
                 await Task.Run(async () =>
                 {
                     var lifetime = Host.Services.GetRequiredService<IHostApplicationLifetime>();
@@ -454,27 +480,20 @@ namespace Bakabase.Infrastructures.Components.App
 
                         Task.Run(async () =>
                         {
+                            var phase = "post-migration initialization";
                             try
                             {
-                                _guiAdapter.ShowInitializationWindow(AppLocalizer.App_MakingBackups());
-                                await Backup(Host.Services);
-
-                                _guiAdapter.ShowInitializationWindow(AppLocalizer.App_Migrating());
-
-                                if (HasLogDatabase)
-                                {
-                                    await Host.Services.MigrateSqliteDbContexts<LogDbContext>();
-                                }
-
-                                await Migrate(Host.Services, MigrationTiming.BeforeDbMigration);
-                                await MigrateDb(Host.Services);
-                                await Migrate(Host.Services, MigrationTiming.AfterDbMigration);
-
+                                // Hosted services such as NoticeBaselineInitializer must see
+                                // the previous version when they start, so persist this only
+                                // after ApplicationStarted. Backups and migrations above still
+                                // complete before any hosted service can access the database.
+                                phase = "version persistence";
                                 await _appOptionsManager.SaveAsync(t =>
                                 {
                                     t.Version = AppService.CoreVersion.ToString();
                                 });
 
+                                phase = "post-migration initialization";
                                 _guiAdapter.ShowInitializationWindow(AppLocalizer.App_FinishingUp());
                                 await ExecuteCustomProgress(Host.Services);
 
@@ -489,6 +508,7 @@ namespace Bakabase.Infrastructures.Components.App
                             catch (Exception e)
                             {
                                 // todo: same error handling as outer scope
+                                LogSqliteStartupFailure(e, phase);
                                 Logger?.LogError(e.BuildFullInformationText());
                                 _guiAdapter.ShowFatalErrorWindow(e.BuildFullInformationText(),
                                     AppLocalizer?.App_FatalError() ?? "Fatal error");
@@ -508,10 +528,93 @@ namespace Bakabase.Infrastructures.Components.App
             }
             catch (Exception e)
             {
+                LogSqliteStartupFailure(e, startupPhase);
                 Logger?.LogError(e.BuildFullInformationText());
                 _guiAdapter.ShowFatalErrorWindow(e.BuildFullInformationText(),
                     AppLocalizer?.App_FatalError() ?? "Fatal error");
                 return false;
+            }
+        }
+
+        private void LogSqliteStartupFailure(Exception error, string phase)
+        {
+            var sqlite = FindSqliteException(error);
+            if (sqlite == null || Logger == null) return;
+
+            // A primary SQLITE_READONLY code cannot distinguish a moved DB from an
+            // unwritable directory or WAL sidecar. Capture the extended code and the
+            // on-disk state at the point of failure; diagnostics must never mask it.
+            try
+            {
+                var dataDir = AppDataLocator.ResolveEffectiveDataDirectory(AppService.DefaultAppDataDirectory);
+                var mainDb = Path.Combine(dataDir, "bakabase_insideworld.db");
+                var logDb = Path.Combine(dataDir, "bootstrap_log.db");
+                Logger.LogError(
+                    "SQLite startup failure: phase={Phase}, pid={Pid}, code={Code}, extendedCode={ExtendedCode}, dataDir={DataDir}, directory={DirectoryState}, directoryWritable={DirectoryWritable}, mainDb={MainDb}, mainDbFiles={MainDbFiles}, logDb={LogDb}, logDbFiles={LogDbFiles}",
+                    phase, Environment.ProcessId, sqlite.SqliteErrorCode, sqlite.SqliteExtendedErrorCode,
+                    dataDir, DescribePath(dataDir), ProbeDirectoryWritable(dataDir),
+                    mainDb, DescribeDatabaseFiles(mainDb), logDb, DescribeDatabaseFiles(logDb));
+            }
+            catch (Exception diagnosticError)
+            {
+                Logger.LogWarning(diagnosticError,
+                    "Could not collect SQLite startup diagnostics: phase={Phase}, pid={Pid}, code={Code}, extendedCode={ExtendedCode}",
+                    phase, Environment.ProcessId, sqlite.SqliteErrorCode, sqlite.SqliteExtendedErrorCode);
+            }
+        }
+
+        private static SqliteException? FindSqliteException(Exception error)
+        {
+            var pending = new Stack<Exception>();
+            pending.Push(error);
+            while (pending.TryPop(out var current))
+            {
+                if (current is SqliteException sqlite) return sqlite;
+                if (current.InnerException is { } inner) pending.Push(inner);
+                if (current is AggregateException aggregate)
+                {
+                    foreach (var child in aggregate.InnerExceptions) pending.Push(child);
+                }
+            }
+
+            return null;
+        }
+
+        private static string DescribeDatabaseFiles(string dbPath) =>
+            $"db={DescribePath(dbPath)}, wal={DescribePath(dbPath + "-wal")}, shm={DescribePath(dbPath + "-shm")}";
+
+        private static string DescribePath(string path)
+        {
+            try
+            {
+                return File.GetAttributes(path).ToString();
+            }
+            catch (FileNotFoundException)
+            {
+                return "missing";
+            }
+            catch (DirectoryNotFoundException)
+            {
+                return "missing";
+            }
+            catch (Exception e)
+            {
+                return $"{e.GetType().Name} (0x{e.HResult:X8})";
+            }
+        }
+
+        private static string ProbeDirectoryWritable(string dataDir)
+        {
+            var probePath = Path.Combine(dataDir, $".bakabase-write-probe-{Guid.NewGuid():N}");
+            try
+            {
+                using var _ = new FileStream(probePath, FileMode.CreateNew, FileAccess.Write,
+                    FileShare.None, 1, FileOptions.DeleteOnClose);
+                return "yes";
+            }
+            catch (Exception e)
+            {
+                return $"{e.GetType().Name} (0x{e.HResult:X8})";
             }
         }
 
