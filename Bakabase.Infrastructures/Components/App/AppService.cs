@@ -327,43 +327,8 @@ namespace Bakabase.Infrastructures.Components.App
 
         public async Task MakeBackupIfNeeded()
         {
-            // hardcode
             var prevVersion = await GetLastRunningVersion();
-            if (prevVersion != CoreVersion &&
-                !SemVersion.Parse(AppConstants.InitialVersion, SemVersionStyles.Any).Equals(prevVersion))
-            {
-                _logger.LogInformation("New version of app is starting, start making backups...");
-                var targetRootDir =
-                    Directory.CreateDirectory(Path.Combine(DataBackupDirectory, prevVersion.ToString()!));
-                var ignoredDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-                    {DataBackupDirectory, TempFilesPath, ComponentsPath, DataFilesPath};
-                // dirs
-                foreach (var dir in Directory.GetDirectories(AppDataDirectory).Where(a => !ignoredDirs.Contains(a)))
-                {
-                    var tmpDir = Directory.CreateDirectory(Path.Combine(targetRootDir.FullName, Path.GetFileName(dir)));
-                    _logger.LogInformation($"Making backups of {dir}");
-                    DirectoryUtils.CopyFilesRecursively(dir, tmpDir.FullName, false);
-                }
-
-                // files
-                foreach (var file in Directory.GetFiles(AppDataDirectory))
-                {
-                    // Held open exclusively by this very process for as long as it runs, so it
-                    // cannot be read, let alone copied — and a copy would mean nothing anyway.
-                    if (string.Equals(Path.GetFileName(file), SingleInstance.DataDirectoryLock.FileName,
-                            StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
-
-                    var destFileFullname = Path.Combine(targetRootDir.FullName, Path.GetFileName(file));
-                    if (!File.Exists(destFileFullname))
-                    {
-                        _logger.LogInformation($"Making backups of {file}");
-                        File.Copy(file, destFileFullname);
-                    }
-                }
-            }
+            AutomaticBackup.Run(AppDataDirectory, prevVersion, CoreVersion, _appOptionsManager.Value, _logger);
         }
 
         public AppInfo AppInfo => new()
