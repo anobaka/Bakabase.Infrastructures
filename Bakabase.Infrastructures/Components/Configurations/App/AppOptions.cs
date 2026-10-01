@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using Bakabase.Infrastructures.Components.App.Models.Constants;
 using Bakabase.Infrastructures.Components.Gui;
 using Bootstrap.Components.Configuration.Abstractions;
@@ -21,6 +22,15 @@ namespace Bakabase.Infrastructures.Components.Configurations.App
         public string Version { get; set; } = AppConstants.InitialVersion;
         public bool EnablePreReleaseChannel { get; set; }
         public bool EnableAnonymousDataTracking { get; set; } = true;
+        public bool EnableAutomaticBackup { get; set; } = true;
+
+        /// <summary>
+        /// Maximum number of version backups kept while automatic backups are enabled.
+        /// Old backups are removed on startup, after a new backup has completed when needed.
+        /// </summary>
+        [Range(1, int.MaxValue)]
+        public int MaxBackupVersions { get; set; } = 7;
+
         public string WwwRootPath { get; set; } = null!;
 
         /// <summary>

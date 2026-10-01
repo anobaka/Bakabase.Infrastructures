@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using Bakabase.Infrastructures.Components.Gui;
 
 namespace Bakabase.Infrastructures.Components.App.Models.RequestModels
@@ -8,6 +9,9 @@ namespace Bakabase.Infrastructures.Components.App.Models.RequestModels
         public string? Language { get; set; }
         public bool? EnablePreReleaseChannel { get; set; }
         public bool? EnableAnonymousDataTracking { get; set; }
+        public bool? EnableAutomaticBackup { get; set; }
+        [Range(1, int.MaxValue)]
+        public int? MaxBackupVersions { get; set; }
         public CloseBehavior? CloseBehavior { get; set; }
         public UiTheme? UiTheme { get; set; }
         public int? AutoListeningPortCount { get; set; }
