@@ -111,6 +111,51 @@ namespace Bakabase.Infrastructures.Components.App.SingleInstance
         }
 
         /// <summary>
+        /// Borrows a lock already owned by this guard. The caller must not dispose it: startup
+        /// setup uses the handle to prove ownership without opening the same lock a second time.
+        /// </summary>
+        public static DataDirectoryLock? GetHeldLock(string dataDirectory)
+        {
+            if (!TryNormalize(dataDirectory, out var key)) return null;
+            lock (Gate)
+            {
+                return Leases.TryGetValue(key, out var lease) && lease.Lock.IsHeld ? lease.Lock : null;
+            }
+        }
+
+        /// <summary>
+        /// Transfers an already-held setup destination lock to the guard without unlocking it.
+        /// Existing leases, including the setup anchor, stay owned until process shutdown.
+        /// The caller relinquishes disposal only when this method returns successfully.
+        /// </summary>
+        public static void AdoptHeldLock(DataDirectoryLock directoryLock)
+        {
+            ArgumentNullException.ThrowIfNull(directoryLock);
+            if (!directoryLock.IsHeld) throw new InvalidOperationException("Cannot adopt a released directory lock.");
+            var key = DataDirectoryIdentity.Normalize(directoryLock.Directory);
+            lock (AcquireGate)
+            {
+                lock (Gate)
+                {
+                    if (Leases.TryGetValue(key, out var existing))
+                    {
+                        if (!ReferenceEquals(existing.Lock, directoryLock))
+                            throw new InvalidOperationException("The guard already owns a different lock for this directory.");
+                        _primaryKey = key;
+                        return;
+                    }
+                }
+
+                var server = StartActivationServer(key);
+                lock (Gate)
+                {
+                    Leases[key] = new Lease(directoryLock.Directory, directoryLock, server);
+                    _primaryKey = key;
+                }
+            }
+        }
+
+        /// <summary>
         /// For the entry point: owns this process's effective data directory, or hands off to
         /// the process that does.
         /// </summary>
@@ -378,6 +423,17 @@ namespace Bakabase.Infrastructures.Components.App.SingleInstance
 
             // The channel starts only once the lock is ours: a server started first could
             // answer for a directory some other process owns.
+            var server = StartActivationServer(key);
+            lock (Gate)
+            {
+                Leases[key] = new Lease(dataDirectory, attempt.Lock!, server);
+            }
+
+            return (DataDirectoryLockStatus.Acquired, null);
+        }
+
+        private static ActivationServer? StartActivationServer(string key)
+        {
             var channel = ActivationChannel.GetName(key);
             ActivationServer? server = null;
             try
@@ -391,12 +447,7 @@ namespace Bakabase.Infrastructures.Components.App.SingleInstance
                 WriteStderr($"Bakabase activation channel {channel} could not start: {e.Message}");
             }
 
-            lock (Gate)
-            {
-                Leases[key] = new Lease(dataDirectory, attempt.Lock!, server);
-            }
-
-            return (DataDirectoryLockStatus.Acquired, null);
+            return server;
         }
 
         private static void Release(string dataDirectory, Func<Lease, bool> removeEmptyDirectory)
