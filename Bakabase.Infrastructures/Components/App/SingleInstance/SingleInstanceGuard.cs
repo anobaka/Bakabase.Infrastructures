@@ -81,6 +81,8 @@ namespace Bakabase.Infrastructures.Components.App.SingleInstance
         private static string? _primaryKey;
         private static Action? _activationHandler;
         private static bool _activationPending;
+        private static Action<string>? _toolNavigationHandler;
+        private static string? _pendingToolLink;
         private static string? _lastProblem;
 
         private sealed class Lease(string directory, DataDirectoryLock @lock, ActivationServer? server)
@@ -106,6 +108,51 @@ namespace Bakabase.Infrastructures.Components.App.SingleInstance
                     return _primaryKey != null && Leases.TryGetValue(_primaryKey, out var lease)
                         ? lease.Directory
                         : null;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Borrows a lock already owned by this guard. The caller must not dispose it: startup
+        /// setup uses the handle to prove ownership without opening the same lock a second time.
+        /// </summary>
+        public static DataDirectoryLock? GetHeldLock(string dataDirectory)
+        {
+            if (!TryNormalize(dataDirectory, out var key)) return null;
+            lock (Gate)
+            {
+                return Leases.TryGetValue(key, out var lease) && lease.Lock.IsHeld ? lease.Lock : null;
+            }
+        }
+
+        /// <summary>
+        /// Transfers an already-held setup destination lock to the guard without unlocking it.
+        /// Existing leases, including the setup anchor, stay owned until process shutdown.
+        /// The caller relinquishes disposal only when this method returns successfully.
+        /// </summary>
+        public static void AdoptHeldLock(DataDirectoryLock directoryLock)
+        {
+            ArgumentNullException.ThrowIfNull(directoryLock);
+            if (!directoryLock.IsHeld) throw new InvalidOperationException("Cannot adopt a released directory lock.");
+            var key = DataDirectoryIdentity.Normalize(directoryLock.Directory);
+            lock (AcquireGate)
+            {
+                lock (Gate)
+                {
+                    if (Leases.TryGetValue(key, out var existing))
+                    {
+                        if (!ReferenceEquals(existing.Lock, directoryLock))
+                            throw new InvalidOperationException("The guard already owns a different lock for this directory.");
+                        _primaryKey = key;
+                        return;
+                    }
+                }
+
+                var server = StartActivationServer(key);
+                lock (Gate)
+                {
+                    Leases[key] = new Lease(directoryLock.Directory, directoryLock, server);
+                    _primaryKey = key;
                 }
             }
         }
@@ -299,6 +346,31 @@ namespace Bakabase.Infrastructures.Components.App.SingleInstance
             }
         }
 
+        public static void SetToolNavigationHandler(Action<string> handler)
+        {
+            string? pending;
+            lock (Gate)
+            {
+                _toolNavigationHandler = handler;
+                pending = _pendingToolLink;
+                _pendingToolLink = null;
+            }
+            if (pending != null) SafeInvoke(() => handler(pending));
+        }
+
+        public static bool RequestToolNavigation(string link)
+        {
+            if (DesktopToolLink.GetRoute(link) == null) return false;
+            Action<string>? handler;
+            lock (Gate)
+            {
+                handler = _toolNavigationHandler;
+                if (handler == null) _pendingToolLink = link;
+            }
+            if (handler != null) SafeInvoke(() => handler(link));
+            return true;
+        }
+
         /// <summary>
         /// Releases every lock and stops every channel. For the end of the process; the
         /// operating system would do the same a moment later.
@@ -313,6 +385,8 @@ namespace Bakabase.Infrastructures.Components.App.SingleInstance
                 _primaryKey = null;
                 _activationHandler = null;
                 _activationPending = false;
+                _toolNavigationHandler = null;
+                _pendingToolLink = null;
             }
 
             foreach (var lease in leases)
@@ -378,6 +452,17 @@ namespace Bakabase.Infrastructures.Components.App.SingleInstance
 
             // The channel starts only once the lock is ours: a server started first could
             // answer for a directory some other process owns.
+            var server = StartActivationServer(key);
+            lock (Gate)
+            {
+                Leases[key] = new Lease(dataDirectory, attempt.Lock!, server);
+            }
+
+            return (DataDirectoryLockStatus.Acquired, null);
+        }
+
+        private static ActivationServer? StartActivationServer(string key)
+        {
             var channel = ActivationChannel.GetName(key);
             ActivationServer? server = null;
             try
@@ -391,12 +476,7 @@ namespace Bakabase.Infrastructures.Components.App.SingleInstance
                 WriteStderr($"Bakabase activation channel {channel} could not start: {e.Message}");
             }
 
-            lock (Gate)
-            {
-                Leases[key] = new Lease(dataDirectory, attempt.Lock!, server);
-            }
-
-            return (DataDirectoryLockStatus.Acquired, null);
+            return server;
         }
 
         private static void Release(string dataDirectory, Func<Lease, bool> removeEmptyDirectory)
@@ -463,6 +543,7 @@ namespace Bakabase.Infrastructures.Components.App.SingleInstance
 
         private static void OnMessage(string message)
         {
+            if (RequestToolNavigation(message)) return;
             if (!string.Equals(message.Trim(), ActivationChannel.ShowMessage, StringComparison.Ordinal))
             {
                 return;

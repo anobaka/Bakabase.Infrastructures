@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using Bakabase.Infrastructures.Components.App.Models.Constants;
+using Bakabase.Infrastructures.Components.App.Relocation;
 using Bakabase.Infrastructures.Components.App.SingleInstance;
 using Bakabase.Infrastructures.Components.Configurations.App;
 using Microsoft.Extensions.Logging;
@@ -58,10 +59,9 @@ internal static class AutomaticBackup
 
             foreach (var file in Directory.EnumerateFiles(source))
             {
-                // The running process holds this file exclusively. It belongs to the
-                // process, so it must never be restored with application data.
-                if (string.Equals(Path.GetFileName(file), DataDirectoryLock.FileName,
-                        StringComparison.OrdinalIgnoreCase)) continue;
+                // Instance/coordinator locks and operation capabilities belong to the
+                // running deployment. Restoring them must not replay an old setup plan.
+                if (IsExcludedFile(Path.GetFileName(file))) continue;
                 logger.LogInformation("Making backups of {File}", file);
                 copyFile(file, Path.Combine(staging, Path.GetFileName(file)));
             }
@@ -110,8 +110,21 @@ internal static class AutomaticBackup
     }
 
     private static bool IsExcludedDirectory(string name) =>
-        new[] { "backups", "temp", "components", "data" }
+        new[] { "backups", "temp", "components", "data", ".bakabase-import-work",
+            ".bakabase-relocate-work", PendingRelocationRunner.StagingDirName }
             .Contains(name, StringComparer.OrdinalIgnoreCase);
+
+    private static bool IsExcludedFile(string name)
+    {
+        // Keep the infrastructure layer independent of the Service project which
+        // owns these setup records. Only known root control files are excluded.
+        var original = name.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase) ? name[..^4] : name;
+        return new[] { DataDirectoryLock.FileName, ".bakabase-setup-process.lock",
+                ".bakabase-server-setup.json", ".bakabase-setup-draft.json", ".bakabase-import-status.json",
+                ".bakabase-import.json", ".bakabase-relocate.json",
+                AnchorRedirect.FileName, PendingRelocation.FileName }
+            .Contains(original, StringComparer.OrdinalIgnoreCase);
+    }
 
     private static void CopyDirectory(string source, string target, Action<string, string> copyFile)
     {

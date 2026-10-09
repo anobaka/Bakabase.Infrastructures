@@ -17,6 +17,7 @@ using Semver;
 // with its own SemanticVersion, so it now comes from the Velopack namespace below.
 using Velopack;
 using Velopack.Sources;
+using Velopack.Locators;
 
 namespace Bakabase.Infrastructures.Components.App.Upgrade
 {
@@ -363,9 +364,10 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade
         /// <summary>
         /// Validate the downloaded release while the host is still running, then return the
         /// Velopack launch to perform after the shell has attempted its graceful wind-down.
-        /// Velopack waits for this process to exit before applying the update and relaunching.
+        /// Velopack waits for the owning desktop coordinator (or this standalone process)
+        /// to exit before applying the update and relaunching.
         /// </summary>
-        public Action PrepareUpdateRestart()
+        public Action PrepareUpdateRestart(int? coordinatorProcessId = null)
         {
             if (State.Status != UpdaterStatus.PendingRestart || _lastUpdateInfo == null)
             {
@@ -388,7 +390,19 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade
             // Called after the shell's wind-down. This starts the updater
             // without killing us; the shell then closes Avalonia normally. Keep the original
             // exception intact for the shell to log and show in its native error window.
-            return () => mgr.WaitExitThenApplyUpdates(pending, silent: false, restart: true);
+            return coordinatorProcessId is { } parentPid
+                ? PrepareCoordinatedUpdate(VelopackLocator.Current, pending, parentPid)
+                : () => mgr.WaitExitThenApplyUpdates(pending, silent: false, restart: true);
+        }
+
+        internal static Action PrepareCoordinatedUpdate(IVelopackLocator locator, VelopackAsset pending, int parentPid)
+        {
+            if (parentPid <= 0 || parentPid == Environment.ProcessId)
+                throw new ArgumentOutOfRangeException(nameof(parentPid));
+            // The parent only exits after its business child has exited and its own hosts
+            // have been disposed. Waiting just for this child can replace DLLs while the
+            // coordinator still has the old release loaded (especially on Windows).
+            return () => UpdateExe.Apply(locator, pending, silent: false, waitPid: (uint)parentPid, restart: true);
         }
 
         public async Task UpdateState(Action<UpdaterState> update)
