@@ -81,6 +81,8 @@ namespace Bakabase.Infrastructures.Components.App.SingleInstance
         private static string? _primaryKey;
         private static Action? _activationHandler;
         private static bool _activationPending;
+        private static Action<string>? _toolNavigationHandler;
+        private static string? _pendingToolLink;
         private static string? _lastProblem;
 
         private sealed class Lease(string directory, DataDirectoryLock @lock, ActivationServer? server)
@@ -344,6 +346,31 @@ namespace Bakabase.Infrastructures.Components.App.SingleInstance
             }
         }
 
+        public static void SetToolNavigationHandler(Action<string> handler)
+        {
+            string? pending;
+            lock (Gate)
+            {
+                _toolNavigationHandler = handler;
+                pending = _pendingToolLink;
+                _pendingToolLink = null;
+            }
+            if (pending != null) SafeInvoke(() => handler(pending));
+        }
+
+        public static bool RequestToolNavigation(string link)
+        {
+            if (DesktopToolLink.GetRoute(link) == null) return false;
+            Action<string>? handler;
+            lock (Gate)
+            {
+                handler = _toolNavigationHandler;
+                if (handler == null) _pendingToolLink = link;
+            }
+            if (handler != null) SafeInvoke(() => handler(link));
+            return true;
+        }
+
         /// <summary>
         /// Releases every lock and stops every channel. For the end of the process; the
         /// operating system would do the same a moment later.
@@ -358,6 +385,8 @@ namespace Bakabase.Infrastructures.Components.App.SingleInstance
                 _primaryKey = null;
                 _activationHandler = null;
                 _activationPending = false;
+                _toolNavigationHandler = null;
+                _pendingToolLink = null;
             }
 
             foreach (var lease in leases)
@@ -514,6 +543,7 @@ namespace Bakabase.Infrastructures.Components.App.SingleInstance
 
         private static void OnMessage(string message)
         {
+            if (RequestToolNavigation(message)) return;
             if (!string.Equals(message.Trim(), ActivationChannel.ShowMessage, StringComparison.Ordinal))
             {
                 return;
