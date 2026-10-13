@@ -10,9 +10,7 @@ namespace Bakabase.Infrastructures.Components.Orm.Log
     {
         public LogDbContext([NotNull] DbContextOptions<LogDbContext> options) : base(options)
         {
-            Database.OpenConnection();
-            // cache_size is working with current connection only.
-            Database.ExecuteSqlRaw($"PRAGMA cache_size = {5_000_000}");
+            this.SetSqlitePageCacheBudget(SqliteExtensions.AuxiliaryPageCacheBudgetKiB);
             Database.ExecuteSqlRaw("PRAGMA incremental_vacuum(200)");
         }
 
