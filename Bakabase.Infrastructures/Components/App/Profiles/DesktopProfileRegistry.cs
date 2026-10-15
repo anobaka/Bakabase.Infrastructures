@@ -31,7 +31,7 @@ public sealed class DesktopProfileRegistry(string rootDirectory, string legacyAn
         if (!File.Exists(CatalogPath)) return new(1, "default", [new("default", "", LegacyAnchor, true)]);
         try
         {
-            if (new FileInfo(CatalogPath).Length > 1024 * 1024) throw new InvalidOperationException("Data-space registry is too large.");
+            if (new FileInfo(CatalogPath).Length > 1024 * 1024) throw new InvalidOperationException("Workspace registry is too large.");
             var state = JsonSerializer.Deserialize<DesktopProfileCatalog>(File.ReadAllText(CatalogPath), Json);
             if (state == null || state.Version != 1 || state.Profiles == null || state.Profiles.Count is < 1 or > 100 ||
                 state.Profiles.Any(p => p == null || p.Id == null || p.Name == null || p.AnchorDirectory == null) ||
@@ -40,14 +40,14 @@ public sealed class DesktopProfileRegistry(string rootDirectory, string legacyAn
                     !ValidId(p.Id) || p.Name.Length > 100 || !Path.IsPathFullyQualified(p.AnchorDirectory) ||
                     (p.Id == "default" ? !SamePath(p.AnchorDirectory, LegacyAnchor) :
                         !SamePath(p.AnchorDirectory, Path.Combine(RootDirectory, "anchors", p.Id)))))
-                throw new InvalidOperationException("Invalid data-space registry.");
+                throw new InvalidOperationException("Invalid workspace registry.");
             return state;
         }
-        catch (JsonException e) { throw new InvalidOperationException("Cannot read the data-space registry. Restore profiles.json from a backup; data directories have not been changed.", e); }
+        catch (JsonException e) { throw new InvalidOperationException("Cannot read the workspace registry. Restore profiles.json from a backup; data directories have not been changed.", e); }
     }
 
     public DesktopProfile Get(string id) => Read().Profiles.SingleOrDefault(p => p.Id == id)
-        ?? throw new InvalidOperationException("This data space is no longer registered.");
+        ?? throw new InvalidOperationException("This workspace is no longer registered.");
 
     public DesktopProfile Add(string name, string directory, bool create)
     {
@@ -60,18 +60,18 @@ public sealed class DesktopProfileRegistry(string rootDirectory, string legacyAn
         var duplicate = state.Profiles.FirstOrDefault(p => SamePath(AppDataLocator.ResolveEffectiveDataDirectory(p.AnchorDirectory), target));
         if (duplicate != null)
         {
-            if (create) throw new InvalidOperationException("This directory already belongs to a data space. Open that space instead.");
+            if (create) throw new InvalidOperationException("This directory already belongs to a workspace. Open that workspace instead.");
             return duplicate;
         }
-        if (state.Profiles.Count >= 100) throw new InvalidOperationException("At most 100 data spaces may be registered.");
+        if (state.Profiles.Count >= 100) throw new InvalidOperationException("At most 100 workspaces may be registered.");
         foreach (var profile in state.Profiles)
         {
             var existing = AppDataLocator.ResolveEffectiveDataDirectory(profile.AnchorDirectory);
             if (ContainsPath(existing, target) || ContainsPath(target, existing))
-                throw new InvalidOperationException("Data spaces cannot contain one another. Choose a separate directory.");
+                throw new InvalidOperationException("Workspaces cannot contain one another. Choose a separate directory.");
         }
         if (create && Directory.Exists(target) && Directory.EnumerateFileSystemEntries(target).Any())
-            throw new InvalidOperationException("A new data space requires an empty directory. To keep existing data, add its directory instead.");
+            throw new InvalidOperationException("A new workspace requires an empty directory. To keep existing data, add its directory instead.");
         if (!create && !Directory.Exists(target)) throw new DirectoryNotFoundException("The existing data directory is not available.");
         // Do not create/lock/initialize the target: its first launch must still run Setup.
         var id = Guid.NewGuid().ToString("N");
@@ -90,7 +90,7 @@ public sealed class DesktopProfileRegistry(string rootDirectory, string legacyAn
         using var gate = AcquireWriteLock();
         var state = Read();
         var index = state.Profiles.FindIndex(p => p.Id == id);
-        if (index < 0) throw new InvalidOperationException("This data space is no longer registered.");
+        if (index < 0) throw new InvalidOperationException("This workspace is no longer registered.");
         var updated = state.Profiles[index] with { Name = name };
         state.Profiles[index] = updated;
         Write(makeDefault ? state with { DefaultId = id } : state);
@@ -109,10 +109,10 @@ public sealed class DesktopProfileRegistry(string rootDirectory, string legacyAn
 
     public void Remove(string id, string? currentProfileId)
     {
-        if (id == currentProfileId) throw new InvalidOperationException("Switch to another data space before removing this registration.");
+        if (id == currentProfileId) throw new InvalidOperationException("Switch to another workspace before removing this registration.");
         using var gate = AcquireWriteLock();
         var state = Read();
-        if (state.Profiles.Count == 1) throw new InvalidOperationException("Keep at least one registered data space.");
+        if (state.Profiles.Count == 1) throw new InvalidOperationException("Keep at least one registered workspace.");
         state.Profiles.RemoveAll(p => p.Id == id);
         if (state.DefaultId == id) state = state with { DefaultId = state.Profiles[0].Id };
         // Anchors also hold browser data. Retain them, as well as all user data; removal is registration only.
@@ -127,7 +127,7 @@ public sealed class DesktopProfileRegistry(string rootDirectory, string legacyAn
             var existing = AppDataLocator.ResolveEffectiveDataDirectory(profile.AnchorDirectory);
             if (currentDirectory != null && SamePath(existing, currentDirectory)) continue;
             if (ContainsPath(existing, target) || ContainsPath(target, existing))
-                throw new InvalidOperationException("This directory belongs to another registered data space. Choose a separate directory.");
+                throw new InvalidOperationException("This directory belongs to another registered workspace. Choose a separate directory.");
         }
     }
 
@@ -139,12 +139,12 @@ public sealed class DesktopProfileRegistry(string rootDirectory, string legacyAn
             throw new InvalidOperationException("Choose a data directory outside the application installation.");
         for (var parent = Directory.GetParent(target); parent != null; parent = parent.Parent)
             if (File.Exists(Path.Combine(parent.FullName, "app.json")))
-                throw new InvalidOperationException("A data space cannot be placed inside an existing data directory.");
+                throw new InvalidOperationException("A workspace cannot be placed inside an existing data directory.");
     }
     private static string ValidateName(string name)
     {
         name = name.Trim();
-        if (name.Length is < 1 or > 100 || name.Any(char.IsControl)) throw new ArgumentException("Use a data-space name of 1–100 characters.");
+        if (name.Length is < 1 or > 100 || name.Any(char.IsControl)) throw new ArgumentException("Use a workspace name of 1–100 characters.");
         return name;
     }
     internal static bool ValidId(string id) => id == "default" || Guid.TryParseExact(id, "N", out _);

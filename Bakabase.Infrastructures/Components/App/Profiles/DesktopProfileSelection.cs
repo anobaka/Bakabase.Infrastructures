@@ -15,7 +15,7 @@ public static class DesktopProfileSelection
 
     public static void Initialize(string[] args, DesktopProfileRegistry? registry = null)
     {
-        if (Enabled) throw new InvalidOperationException("Desktop data-space selection was already initialized.");
+        if (Enabled) throw new InvalidOperationException("Desktop workspace selection was already initialized.");
         registry ??= DesktopProfileRegistry.ForCurrentUser();
         var requested = ParseId(args);
         Enabled = true;
@@ -26,7 +26,7 @@ public static class DesktopProfileSelection
         var profile = registry.Get(requested ?? catalog.DefaultId);
         var data = AppDataLocator.ResolveEffectiveDataDirectory(profile.AnchorDirectory);
         if (!profile.RequiresSetup && !Directory.Exists(data))
-            throw new DirectoryNotFoundException("This data space is unavailable. Reconnect its storage before opening it: " + data);
+            throw new DirectoryNotFoundException("This workspace is unavailable. Reconnect its storage before opening it: " + data);
         CurrentId = profile.Id;
         // Preserve the historical migration path only for the unchanged default anchor.
         AppDataAnchor.Use(profile.Id == "default" &&
@@ -41,7 +41,7 @@ public static class DesktopProfileSelection
         var values = args.Where(a => a.StartsWith(ArgumentPrefix, StringComparison.Ordinal)).ToArray();
         if (values.Length == 0) return null;
         if (values.Length != 1 || !DesktopProfileRegistry.ValidId(values[0][ArgumentPrefix.Length..]))
-            throw new ArgumentException("Choose a registered data-space ID; paths cannot be passed as profile arguments.");
+            throw new ArgumentException("Choose a registered workspace ID; paths cannot be passed as profile arguments.");
         return values[0][ArgumentPrefix.Length..];
     }
 
@@ -52,7 +52,7 @@ public static class DesktopProfileSelection
         var profile = catalog.Profiles.FirstOrDefault(p => p.Id == CurrentId);
         if (profile == null || catalog.Profiles.Count == 1 && string.IsNullOrEmpty(profile.Name)) return title;
         var name = string.IsNullOrEmpty(profile.Name)
-            ? System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "zh" ? "默认数据空间" : "Default data space"
+            ? System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "zh" ? "默认工作区" : "Default workspace"
             : profile.Name;
         return title + " — " + name;
     }
@@ -72,7 +72,7 @@ public static class DesktopProfileSelection
 
     public static ProcessStartInfo CreateStartInfo(string profileId)
     {
-        if (!DesktopProfileRegistry.ValidId(profileId)) throw new ArgumentException("Invalid data-space ID.");
+        if (!DesktopProfileRegistry.ValidId(profileId)) throw new ArgumentException("Invalid workspace ID.");
         var executable = Environment.ProcessPath ?? throw new InvalidOperationException("Cannot locate the desktop application.");
         var info = new ProcessStartInfo(executable) { UseShellExecute = false, WorkingDirectory = System.AppContext.BaseDirectory };
         if (Path.GetFileNameWithoutExtension(executable).Equals("dotnet", StringComparison.OrdinalIgnoreCase))

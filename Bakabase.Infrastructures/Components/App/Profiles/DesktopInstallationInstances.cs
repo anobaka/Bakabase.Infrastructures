@@ -54,7 +54,7 @@ public sealed class DesktopInstallationInstances
             catch (FileNotFoundException) { }
             catch (IOException)
             {
-                throw new InvalidOperationException("Quit the other Bakabase data spaces from this installation before updating. Their data is safe; no process will be forcibly closed.");
+                throw new InvalidOperationException("Quit the other Bakabase workspaces from this installation before updating. Their data is safe; no process will be forcibly closed.");
             }
         }
     }
@@ -123,7 +123,7 @@ public sealed class DesktopInstallationInstances
                 ticket.Coordinator is not { Id: > 0, StartedAt: > 0 } || string.IsNullOrWhiteSpace(ticket.UpdaterPath) ||
                 !Path.IsPathFullyQualified(ticket.UpdaterPath) ||
                 ticket.Updater is { } updater && (updater.Id <= 0 || updater.StartedAt <= 0))
-                throw new InvalidOperationException("The desktop update ticket is invalid; no new data space was opened.");
+                throw new InvalidOperationException("The desktop update ticket is invalid; no new workspace was opened.");
             // A new loaded assembly proves the atomic release swap has finished. Velopack
             // can still be alive momentarily while it launches the upgraded application.
             if (ticket.BuildId != _buildId) { File.Delete(TicketPath); return lease; }
@@ -145,7 +145,7 @@ public sealed class DesktopInstallationInstances
         File.Move(temporary, TicketPath, true);
     }
     private static InvalidOperationException Updating(Exception? cause = null) => new(
-        "Bakabase is applying an update. Wait until it has restarted before opening another data space.", cause);
+        "Bakabase is applying an update. Wait until it has restarted before opening another workspace.", cause);
     private static ProcessIdentity Identity(int id)
     {
         using var process = Process.GetProcessById(id);
