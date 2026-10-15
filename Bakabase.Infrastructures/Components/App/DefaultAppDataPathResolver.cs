@@ -56,6 +56,8 @@ namespace Bakabase.Infrastructures.Components.App
             string entryAssemblyName,
             bool isDebug = false)
         {
+            if (profile.AnchorDirectory != null) return Path.GetFullPath(profile.AnchorDirectory);
+
             var envOverride = getEnv(profile.EnvVarName);
             if (!string.IsNullOrWhiteSpace(envOverride))
             {

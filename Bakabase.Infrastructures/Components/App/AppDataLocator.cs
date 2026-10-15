@@ -41,13 +41,20 @@ namespace Bakabase.Infrastructures.Components.App
         /// Whether the profile's data-directory environment variable is set.
         /// </summary>
         public static bool IsEnvironmentOverride =>
+            AppDataAnchor.Current.AnchorDirectory == null &&
             !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(AppDataAnchor.Current.EnvVarName));
 
         /// <summary>
         /// The anchor: where <see cref="AnchorRedirect"/> lives, and the data itself unless the
         /// redirect sends it elsewhere. Pure — creates nothing.
         /// </summary>
-        public static string ResolveAnchor()
+        public static string ResolveAnchor() => ResolveAnchor(AppDataAnchor.Current, Environment.GetEnvironmentVariable);
+
+        /// <summary>Desktop launch registry location; independent of a selected space and its environment override.</summary>
+        public static string ResolvePlatformDefaultAnchor() => ResolveAnchor(AppDataPathProfile.AllInOne,
+            key => key == DefaultAppDataPathResolver.EnvVarName ? null : Environment.GetEnvironmentVariable(key));
+
+        private static string ResolveAnchor(AppDataPathProfile profile, Func<string, string?> getEnvironment)
         {
             var entryAssemblyName = Path.GetFileNameWithoutExtension(
                 Process.GetCurrentProcess().MainModule?.FileName) ?? "Bakabase";
@@ -58,9 +65,9 @@ namespace Bakabase.Infrastructures.Components.App
             isDebug = false;
 #endif
             return DefaultAppDataPathResolver.Resolve(
-                AppDataAnchor.Current,
+                profile,
                 DefaultAppDataPathResolver.GetCurrentOsPlatform(),
-                Environment.GetEnvironmentVariable,
+                getEnvironment,
                 Environment.GetFolderPath,
                 entryAssemblyName,
                 isDebug);

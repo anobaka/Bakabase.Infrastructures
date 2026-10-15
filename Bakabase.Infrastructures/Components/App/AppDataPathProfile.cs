@@ -18,6 +18,9 @@ namespace Bakabase.Infrastructures.Components.App
         string FolderName,
         string WindowsAppDataFolderName)
     {
+        /// <summary>A registered desktop data space selects its anchor without masquerading as an environment override.</summary>
+        public string? AnchorDirectory { get; init; }
+
         /// <summary>The app that runs its own server. Every value here is what shipped before profiles existed.</summary>
         public static readonly AppDataPathProfile AllInOne = new(
             "BAKABASE_DATA_DIR",

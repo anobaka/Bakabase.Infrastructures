@@ -1,3 +1,4 @@
+using Bakabase.Infrastructures.Components.App.Profiles;
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -390,19 +391,26 @@ namespace Bakabase.Infrastructures.Components.App.Upgrade
             // Called after the shell's wind-down. This starts the updater
             // without killing us; the shell then closes Avalonia normally. Keep the original
             // exception intact for the shell to log and show in its native error window.
-            return coordinatorProcessId is { } parentPid
-                ? PrepareCoordinatedUpdate(VelopackLocator.Current, pending, parentPid)
+            DesktopInstallationInstances.ReserveUpdate(coordinatorProcessId ?? Environment.ProcessId, VelopackLocator.Current.UpdateExePath);
+            var launch = coordinatorProcessId is { } parentPid
+                ? PrepareCoordinatedUpdate(VelopackLocator.Current, pending, parentPid, DesktopProfileSelection.CurrentId)
                 : () => mgr.WaitExitThenApplyUpdates(pending, silent: false, restart: true);
+            return () =>
+            {
+                try { launch(); }
+                catch { DesktopInstallationInstances.CancelUpdate(); throw; }
+            };
         }
 
-        internal static Action PrepareCoordinatedUpdate(IVelopackLocator locator, VelopackAsset pending, int parentPid)
+        internal static Action PrepareCoordinatedUpdate(IVelopackLocator locator, VelopackAsset pending, int parentPid, string? profileId = null)
         {
             if (parentPid <= 0 || parentPid == Environment.ProcessId)
                 throw new ArgumentOutOfRangeException(nameof(parentPid));
             // The parent only exits after its business child has exited and its own hosts
             // have been disposed. Waiting just for this child can replace DLLs while the
             // coordinator still has the old release loaded (especially on Windows).
-            return () => UpdateExe.Apply(locator, pending, silent: false, waitPid: (uint)parentPid, restart: true);
+            var updateLocator = DesktopProfileSelection.Enabled ? new ProfileUpdateLocator(locator) : locator;
+            return () => UpdateExe.Apply(updateLocator, pending, silent: false, waitPid: (uint)parentPid, restart: true, restartArgs: profileId != null ? [DesktopProfileSelection.ArgumentPrefix + profileId] : null);
         }
 
         public async Task UpdateState(Action<UpdaterState> update)
