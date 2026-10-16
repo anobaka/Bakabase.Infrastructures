@@ -9,9 +9,7 @@ namespace Bakabase.Infrastructures.Components.Orm.Notification
     {
         public NotificationDbContext([NotNull] DbContextOptions<NotificationDbContext> options) : base(options)
         {
-            Database.OpenConnection();
-            // cache_size is working with current connection only.
-            Database.ExecuteSqlRaw($"PRAGMA cache_size = {5_000_000}");
+            this.SetSqlitePageCacheBudget(SqliteExtensions.AuxiliaryPageCacheBudgetKiB);
         }
     }
 }

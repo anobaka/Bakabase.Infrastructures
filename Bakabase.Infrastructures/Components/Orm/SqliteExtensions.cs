@@ -10,6 +10,23 @@ namespace Bakabase.Infrastructures.Components.Orm
 {
     public static class SqliteExtensions
     {
+        public const int MainPageCacheBudgetKiB = 32 * 1024;
+        public const int AuxiliaryPageCacheBudgetKiB = 8 * 1024;
+
+        /// <summary>
+        /// Applies a per-connection page-cache budget. Negative cache_size values are KiB,
+        /// whereas positive values are page counts and scale with the database page size.
+        /// Reapply for each context because a pooled connection can retain an older setting.
+        /// </summary>
+        public static void SetSqlitePageCacheBudget(this DbContext context, int budgetKiB)
+        {
+            if (budgetKiB <= 0)
+                throw new ArgumentOutOfRangeException(nameof(budgetKiB), "The page-cache budget must be positive.");
+
+            context.Database.OpenConnection();
+            context.Database.ExecuteSqlRaw($"PRAGMA cache_size = {-budgetKiB}");
+        }
+
         public static void UseBootstrapSqLite(this DbContextOptionsBuilder builder, string appDataPath, string filenameWithoutExtension)
         {
             var ds = Path.Combine(appDataPath, $"{Path.GetFileNameWithoutExtension(filenameWithoutExtension)}.db");
@@ -40,12 +57,22 @@ namespace Bakabase.Infrastructures.Components.Orm
             var db = sp.GetRequiredService<TDbContext>();
 
             await db.Database.OpenConnectionAsync();
+            long pageCacheSetting;
+            using (var command = db.Database.GetDbConnection().CreateCommand())
+            {
+                command.CommandText = "PRAGMA cache_size";
+                pageCacheSetting = Convert.ToInt64(await command.ExecuteScalarAsync());
+            }
             await db.Database.ExecuteSqlRawAsync($"PRAGMA encoding = 'UTF-16';PRAGMA page_size = {65536};");
             // This two pragmas below are persistent, and cache_size is working with current connection.
             await db.Database.ExecuteSqlRawAsync($"PRAGMA journal_mode = WAL;");
             await db.Database.ExecuteSqlRawAsync("PRAGMA auto_vacuum = INCREMENTAL");
             await db.Database.ExecuteSqlRawAsync("PRAGMA wal_checkpoint(TRUNCATE)");
             await db.Database.ExecuteSqlRawAsync("VACUUM");
+            // A page-size change can rescale a negative KiB budget's cached page count.
+            // Restore the existing budget before migrations start reading/writing tables.
+            if (pageCacheSetting < 0)
+                await db.Database.ExecuteSqlRawAsync($"PRAGMA cache_size = {pageCacheSetting}");
             await db.Database.ExecuteSqlRawAsync("PRAGMA wal_checkpoint(TRUNCATE)");
             await db.Database.MigrateAsync();
         }
