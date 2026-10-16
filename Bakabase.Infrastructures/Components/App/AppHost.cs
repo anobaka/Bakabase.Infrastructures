@@ -326,6 +326,9 @@ namespace Bakabase.Infrastructures.Components.App
                 #region System-Scope Settings
 
                 options.Language = AppService.NormalizeLanguageCode(_systemService.Language);
+                // Value is a detached snapshot. Persist only the language here;
+                // startup backups and hosted services must still see the previous version.
+                await AppOptionsManager.Default.SaveAsync(o => o.Language = options.Language);
 
                 Logger.LogInformation($"Settings for bakabase scope are not found, use system-scope settings, language: {options.Language}, ui theme: {options.UiTheme}");
 
