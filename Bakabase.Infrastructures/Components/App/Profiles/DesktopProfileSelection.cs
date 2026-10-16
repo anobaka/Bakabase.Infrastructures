@@ -57,10 +57,10 @@ public static class DesktopProfileSelection
         return title + " — " + name;
     }
 
-    public static void EnsureDataTargetAllowed(string target)
+    public static void EnsureDataTargetAllowed(string target, string? currentDirectory = null)
     {
         if (!Enabled) return;
-        DesktopProfileRegistry.ForCurrentUser().ValidateDataTarget(target, AppDataLocator.ResolveEffectiveDataDirectory());
+        DesktopProfileRegistry.ForCurrentUser().ValidateDataTarget(target, currentDirectory ?? AppDataLocator.ResolveEffectiveDataDirectory());
     }
 
     public static void PreserveForRestart(ProcessStartInfo startInfo)
